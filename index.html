@@ -1,12 +1,2280 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>EdgeFlow Command Center</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EdgeFlow Command Center</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f5f4f1;--surface:#fff;--surface2:#f0efe9;--surface3:#e8e5de;
+  --border:rgba(26,24,18,.08);--border2:rgba(26,24,18,.15);
+  --text:#1a1814;--text2:#6b6560;--text3:#a8a298;--text4:#c8c0b8;
+  --green:#166534;--green-bg:#f0faf4;--green-mid:#bbf7d0;
+  --red:#991b1b;--red-bg:#fef2f2;--red-mid:#fecaca;
+  --amber:#92400e;--amber-bg:#fffbeb;--amber-mid:#fde68a;
+  --blue:#1e40af;--blue-bg:#eff6ff;
+  --purple:#7e22ce;--purple-bg:#faf5ff;--nav-h:76px;
+}
+body{
+  min-height:100vh;background:
+    radial-gradient(circle at 14% -10%,rgba(251,191,36,.16),transparent 30%),
+    radial-gradient(circle at 88% 2%,rgba(30,64,175,.12),transparent 26%),
+    var(--bg);
+  color:var(--text);font-family:"DM Sans",-apple-system,system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+.app{min-height:100vh;padding-bottom:calc(var(--nav-h) + 22px)}
+.topbar{
+  position:sticky;top:0;z-index:30;background:rgba(255,255,255,.86);backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border);padding:22px 42px;display:flex;align-items:center;justify-content:space-between;
+}
+.brand-kicker,.kicker,.form-label,.card-label,.section-kicker{font-size:10px;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3);font-weight:900}
+.page-title{font-family:"DM Serif Display",Georgia,serif;font-size:34px;letter-spacing:-1.2px;line-height:1;margin-top:2px}
+.status-row{display:flex;gap:10px;align-items:center}
+.status-badge,.pill{
+  font-size:11px;font-weight:800;padding:8px 12px;border-radius:999px;background:var(--surface2);color:var(--text2);border:1px solid var(--border);
+}
+.status-badge.ok{background:var(--green-bg);color:var(--green);border-color:var(--green-mid)}
+.status-badge.err{background:var(--red-bg);color:var(--red);border-color:var(--red-mid)}
+.status-badge.warn{background:var(--amber-bg);color:var(--amber);border-color:var(--amber-mid)}
+.scroll-area{max-width:1120px;margin:0 auto;padding:28px 34px}
+.page{display:none;animation:fadeUp .22s ease both}
+.page.active{display:block}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.grid{display:grid;gap:14px}.grid-2{grid-template-columns:repeat(2,1fr)}.grid-3{grid-template-columns:repeat(3,1fr)}.grid-4{grid-template-columns:repeat(4,1fr)}
+.card{
+  background:rgba(255,255,255,.95);border:1px solid var(--border);border-radius:20px;
+  box-shadow:0 10px 32px rgba(26,24,18,.052);overflow:hidden;
+}
+.card-header{padding:16px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.card-body{padding:18px}
+.hero{
+  padding:28px 24px;background:linear-gradient(145deg,#fff,#f8f6ef);border:1px solid var(--border);border-radius:24px;
+  box-shadow:0 12px 42px rgba(26,24,18,.06);margin-bottom:14px;
+}
+.pnl-amount{font-family:"DM Serif Display",Georgia,serif;font-size:64px;line-height:.95;letter-spacing:-3px;margin:8px 0 4px}
+.pos{color:var(--green)}.neg{color:var(--red)}.muted{color:var(--text3)}
+.stat-row{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--border)}
+.stat-item{padding:14px;text-align:center;border-right:1px solid var(--border)}.stat-item:last-child{border-right:0}
+.stat-item-l{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--text4);font-weight:900;margin-bottom:5px}
+.stat-item-v{font-size:16px;font-weight:900}
+.section-header{display:flex;justify-content:space-between;align-items:center;margin:20px 0 9px}
+.section-title{font-size:14px;font-weight:900}
+.link-btn{background:transparent;border:0;color:var(--blue);font-weight:800;cursor:pointer}
+.trade-list{display:flex;flex-direction:column}
+.trade-row{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:.15s}
+.trade-row:hover{background:var(--surface2)}.trade-row:last-child{border-bottom:0}
+.tr-bar{width:4px;height:38px;border-radius:4px}.tr-bar.win{background:var(--green)}.tr-bar.loss{background:var(--red)}.tr-bar.be{background:var(--text4)}
+.tr-main{flex:1;min-width:0}.tr-top{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px}
+.tr-dir{font-size:9px;font-weight:900;padding:3px 7px;border-radius:6px;text-transform:uppercase}.tr-dir.long{background:var(--green-bg);color:var(--green)}.tr-dir.short{background:var(--red-bg);color:var(--red)}
+.tr-meta{font-size:11px;color:var(--text3);font-weight:700}.tr-pills{display:flex;gap:4px;flex-wrap:wrap}.tr-pill{font-size:9px;padding:2px 6px;border-radius:5px;font-weight:800;background:var(--surface2);color:var(--text2)}.tr-pill.core{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-mid)}.tr-pill.off{background:var(--red-bg);color:var(--red);text-decoration:line-through}
+.tr-right{text-align:right}.tr-r{font-size:16px;font-weight:900}.tr-pnl{font-size:11px;color:var(--text3);font-weight:800;margin-top:2px}
+.empty{text-align:center;padding:28px;color:var(--text3)}
+.quick-card{padding:20px;border-radius:20px;border:1px solid var(--border);cursor:pointer;background:var(--surface);box-shadow:0 8px 26px rgba(26,24,18,.045);transition:.15s}.quick-card:hover{transform:translateY(-2px)}
+.quick-card.primary{background:var(--text);color:#fff}.quick-card.primary .muted{color:rgba(255,255,255,.45)}
+.form-card{background:var(--surface);border:1px solid var(--border);border-radius:22px;box-shadow:0 10px 34px rgba(26,24,18,.052);overflow:hidden}
+.form-section{padding:18px;border-bottom:1px solid var(--border)}.form-section:last-child{border-bottom:0}
+.form-row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}.form-group{display:flex;flex-direction:column;gap:7px}
+.form-input,.form-textarea,.form-select{
+  background:var(--surface2);border:1px solid var(--border2);border-radius:12px;padding:11px 13px;font:inherit;color:var(--text);outline:none;min-width:115px;
+}
+.form-input:focus,.form-textarea:focus{border-color:rgba(26,24,18,.42);box-shadow:0 0 0 3px rgba(26,24,18,.06)}
+.form-textarea{width:100%;min-height:82px;resize:vertical;line-height:1.55}
+.btg{display:flex;gap:7px;flex-wrap:wrap}
+.btt{font-size:12px;font-weight:900;padding:9px 14px;border-radius:12px;cursor:pointer;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);font-family:inherit;transition:.12s}
+.btt:hover{background:var(--surface3)}.btt.sel-default{background:var(--text);color:#fff;border-color:var(--text)}.btt.sel-long,.btt.sel-win,.btt.sel-yes{background:var(--green-bg);color:var(--green);border-color:var(--green-mid)}.btt.sel-short,.btt.sel-loss,.btt.sel-no{background:var(--red-bg);color:var(--red);border-color:var(--red-mid)}.btt.sel-be,.btt.sel-core{background:var(--amber-bg);color:var(--amber);border-color:var(--amber-mid)}
+.core-warn{font-size:11px;color:var(--red);background:var(--red-bg);border:1px solid var(--red-mid);border-radius:10px;padding:9px 12px;margin-top:9px;display:none}
+.ss-drop,.audio-drop{border:1.7px dashed var(--border2);border-radius:14px;padding:22px;text-align:center;cursor:pointer;background:var(--surface2);transition:.15s}.ss-drop:hover,.audio-drop:hover{background:var(--surface3);border-color:rgba(26,24,18,.25)}
+.ss-previews{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.ss-thumb{position:relative;width:78px;height:78px}.ss-thumb img{width:78px;height:78px;border-radius:12px;object-fit:cover;border:1px solid var(--border)}.ss-remove{position:absolute;top:-5px;right:-5px;width:20px;height:20px;border-radius:50%;background:var(--red);color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #fff;font-weight:900}
+.form-actions{padding:16px 18px;background:var(--surface2);display:flex;justify-content:flex-end;gap:9px}
+.btn{font-size:13px;font-weight:900;padding:11px 18px;border-radius:13px;cursor:pointer;border:0;font-family:inherit}.btn-primary{background:var(--text);color:#fff}.btn-ghost{background:var(--surface);color:var(--text2);border:1px solid var(--border2)}.btn-danger{background:var(--red-bg);color:var(--red);border:1px solid var(--red-mid)}
+.filter-row{display:flex;gap:7px;overflow-x:auto;margin-bottom:10px}.filter-chip{white-space:nowrap;font-size:11px;font-weight:800;padding:8px 13px;border-radius:999px;border:1px solid var(--border2);background:var(--surface);color:var(--text3);cursor:pointer}.filter-chip.active{background:var(--text);color:#fff;border-color:var(--text)}
+.stats-big{padding:20px}.stats-val{font-family:"DM Serif Display";font-size:38px;letter-spacing:-1px}
+.bkd-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}.bkd-row:last-child{border-bottom:0}.bkd-label{font-size:12px;color:var(--text2);flex:1}.bkd-bar-wrap{width:110px;height:7px;background:var(--surface2);border-radius:10px;overflow:hidden}.bkd-bar{height:100%;border-radius:10px}.bkd-val{font-size:12px;font-weight:900;min-width:38px;text-align:right}
+.calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:18px}.cal-day{min-height:82px;border-radius:13px;background:var(--surface2);padding:9px;border:1px solid transparent}.cal-day.win{background:var(--green-bg);color:var(--green);border-color:var(--green-mid)}.cal-day.loss{background:var(--red-bg);color:var(--red);border-color:var(--red-mid)}.cal-day small{display:block;margin-top:8px;font-weight:900}
+.gamma-hero{display:grid;grid-template-columns:1.2fr .8fr;gap:14px}.gamma-map{height:460px;background:#0f172a;border-radius:18px;overflow:hidden}.gamma-controls{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}.level-card{padding:18px}.level-val{font-family:"DM Serif Display";font-size:32px}
+.settings-row{display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-bottom:1px solid var(--border);gap:12px}.settings-row:last-child{border-bottom:0}.settings-title{font-weight:900}.settings-sub{font-size:11px;color:var(--text3);margin-top:2px}.settings-input{background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:8px 10px;font:inherit;width:160px}
+.toggle{width:44px;height:26px;border-radius:999px;border:0;background:var(--surface3);position:relative;cursor:pointer}.toggle::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.22);transition:.2s}.toggle.on{background:var(--green)}.toggle.on::after{left:21px}
+.audio-track{display:flex;align-items:center;gap:8px;padding:9px 10px;background:var(--surface2);border-radius:10px;margin-top:7px;font-size:12px}.audio-track-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(26,24,18,.45);z-index:100;align-items:center;justify-content:center;padding:24px;backdrop-filter:blur(5px)}.modal-overlay.open{display:flex}.modal-sheet{width:100%;max-width:650px;max-height:90vh;overflow:auto;background:var(--surface);border-radius:24px;box-shadow:0 30px 90px rgba(0,0,0,.25)}.modal-header{padding:18px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}.modal-body{padding:20px}.modal-section{padding:14px 0;border-bottom:1px solid var(--border)}.modal-section:last-child{border-bottom:0}.modal-close{width:34px;height:34px;border-radius:50%;border:0;background:var(--surface2);cursor:pointer}
+.tab-bar{position:fixed;left:0;right:0;bottom:0;height:var(--nav-h);background:rgba(255,255,255,.92);border-top:1px solid var(--border);backdrop-filter:blur(22px);z-index:50;display:grid;grid-template-columns:repeat(6,1fr);padding:8px 10px}.tab-item{border:0;background:transparent;color:var(--text3);font-size:11px;font-weight:900;cursor:pointer;border-radius:14px}.tab-item.active{background:var(--surface2);color:var(--text)}
+.toast{position:fixed;bottom:calc(var(--nav-h) + 14px);left:50%;transform:translateX(-50%) translateY(8px);padding:11px 18px;border-radius:999px;background:var(--text);color:#fff;font-size:12px;font-weight:800;z-index:999;opacity:0;transition:.2s;pointer-events:none}.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}.toast.green{background:var(--green)}.toast.red{background:var(--red)}
+.win-flash{position:fixed;inset:0;background:rgba(22,101,52,.07);pointer-events:none;z-index:500;opacity:0;transition:.35s}.win-flash.show{opacity:1}
+.lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.94);z-index:1000;align-items:center;justify-content:center}.lightbox.open{display:flex}.lightbox img{max-width:95vw;max-height:92vh;border-radius:12px}
+@media(max-width:850px){.topbar{padding:16px 18px}.page-title{font-size:26px}.scroll-area{padding:16px}.grid-2,.grid-3,.grid-4,.gamma-hero{grid-template-columns:1fr}.pnl-amount{font-size:48px}.tab-bar{grid-template-columns:repeat(3,1fr);height:110px}.app{padding-bottom:126px}.gamma-controls{grid-template-columns:repeat(2,1fr)}}
+</style>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<style id="edgeflow-saas-redesign-ui">
+:root{
+  --bg:#f5f3ee;
+  --panel:#ffffff;
+  --panel2:#fbfaf7;
+  --ink:#171510;
+  --muted:#6f6860;
+  --faint:#a9a198;
+  --line:rgba(23,21,16,.10);
+  --line2:rgba(23,21,16,.16);
+  --green:#087a50;
+  --green2:#eafbf2;
+  --green3:#8ee5ba;
+  --red:#a11d1d;
+  --red2:#fff1f1;
+  --red3:#ffc7c7;
+  --purple:#6d28d9;
+  --purple2:#f4ecff;
+  --blue:#2563eb;
+  --gold:#9a640f;
+  --shadow:0 14px 42px rgba(23,21,16,.065);
+  --shadow-soft:0 6px 20px rgba(23,21,16,.045);
+  --radius:22px;
+}
+html,body{background:linear-gradient(115deg,#fbfaf7 0%,#f5f3ee 52%,#eef0f4 100%)!important;color:var(--ink)!important}
+.app{padding-bottom:108px!important}
+.topbar{
+  position:sticky!important;top:0!important;z-index:50!important;
+  display:flex!important;align-items:center!important;justify-content:space-between!important;
+  max-width:1180px!important;margin:0 auto!important;padding:22px 28px!important;
+  background:rgba(255,255,255,.82)!important;backdrop-filter:blur(18px)!important;
+  border:0!important;border-bottom:1px solid var(--line)!important;box-shadow:none!important;
+}
+.brand-kicker{font-size:13px!important;letter-spacing:0!important;color:var(--faint)!important;font-weight:600!important;text-transform:none!important}
+.page-title{font-family:"DM Serif Display",Georgia,serif!important;font-size:35px!important;line-height:1!important;letter-spacing:-1.1px!important}
+.status-row{display:flex!important;gap:10px!important;align-items:center!important}
+.status-badge{
+  border:1px solid var(--line)!important;background:#fff!important;color:var(--muted)!important;
+  border-radius:999px!important;padding:9px 13px!important;font-size:12px!important;font-weight:800!important;box-shadow:var(--shadow-soft)!important;
+}
+.status-badge.ok{background:var(--green2)!important;color:var(--green)!important;border-color:var(--green3)!important}
+.status-badge.err{background:var(--red2)!important;color:var(--red)!important;border-color:var(--red3)!important}
+.status-badge.warn{background:#fff8e7!important;color:var(--gold)!important;border-color:#f4d77d!important}
+
+.scroll-area{max-width:1180px!important;margin:0 auto!important;padding:26px 28px 124px!important}
+.page{width:100%!important}
+.card,.form-card,.panel-card,.session-summary-card,.action-card,.gamma-market-card,.gamma-chart-card,.level-card,.gamma-education-grid article{
+  background:rgba(255,255,255,.96)!important;border:1px solid var(--line)!important;border-radius:var(--radius)!important;box-shadow:var(--shadow)!important;
+}
+.eyebrow,.card-label,.kicker,.form-label{
+  font-size:11px!important;line-height:1!important;letter-spacing:.14em!important;text-transform:uppercase!important;color:var(--faint)!important;font-weight:900!important;
+}
+.muted{color:var(--faint)!important}
+.link-btn{border:0!important;background:transparent!important;color:#244a9b!important;font-weight:800!important;cursor:pointer!important}
+
+/* Bottom nav */
+.tab-bar{
+  position:fixed!important;left:50%!important;right:auto!important;bottom:18px!important;z-index:90!important;
+  width:min(830px,calc(100vw - 32px))!important;height:64px!important;transform:translateX(-50%)!important;
+  display:grid!important;grid-template-columns:1fr 1fr 1.18fr 1fr 1fr 1fr!important;gap:4px!important;
+  padding:7px!important;border:1px solid var(--line)!important;border-radius:999px!important;
+  background:rgba(255,255,255,.92)!important;backdrop-filter:blur(22px)!important;box-shadow:0 18px 55px rgba(23,21,16,.14)!important;
+}
+.tab-item{
+  height:50px!important;border:0!important;border-radius:999px!important;background:transparent!important;color:var(--faint)!important;
+  font-size:12px!important;font-weight:900!important;cursor:pointer!important;transition:.18s ease!important;
+}
+.tab-item:hover{background:#f0eee7!important;color:var(--ink)!important}
+.tab-item.active{background:var(--ink)!important;color:#fff!important}
+#tab-log{
+  height:56px!important;margin-top:-10px!important;background:var(--ink)!important;color:#fff!important;border-radius:999px!important;
+  box-shadow:0 16px 32px rgba(23,21,16,.23)!important;font-size:13px!important;
+}
+#tab-log.active{background:var(--green)!important}
+
+/* Today page */
+.dashboard-shell{display:flex!important;flex-direction:column!important;gap:18px!important}
+.session-summary-card{display:grid!important;grid-template-columns:1.35fr .65fr!important;gap:22px!important;padding:26px!important}
+.session-summary-card h2{font-size:30px!important;letter-spacing:-.7px!important;margin:8px 0!important}
+.session-summary-card p{color:var(--muted)!important;font-size:15px!important;line-height:1.65!important;max-width:700px!important}
+.summary-metric{display:flex!important;flex-direction:column!important;justify-content:center!important;align-items:flex-end!important;text-align:right!important}
+.summary-metric span,.stat-tile span{font-size:11px!important;letter-spacing:.14em!important;text-transform:uppercase!important;color:var(--faint)!important;font-weight:900!important}
+.summary-metric strong{font-family:"DM Serif Display",Georgia,serif!important;font-size:56px!important;line-height:1!important;letter-spacing:-2px!important}
+.summary-metric small,.stat-tile small{color:var(--faint)!important;font-size:12px!important}
+.stats-strip{display:grid!important;grid-template-columns:repeat(3,1fr)!important;gap:14px!important}
+.stat-tile{background:#fff!important;border:1px solid var(--line)!important;border-radius:18px!important;padding:18px 20px!important;box-shadow:var(--shadow-soft)!important}
+.stat-tile strong{display:block!important;margin:8px 0 4px!important;font-size:29px!important;letter-spacing:-.8px!important}
+.today-action-grid{display:grid!important;grid-template-columns:1fr 1fr!important;gap:18px!important}
+.action-card{padding:24px!important;display:flex!important;flex-direction:column!important;gap:14px!important;cursor:pointer!important;min-height:210px!important;transition:.18s ease!important}
+.action-card:hover{transform:translateY(-2px)!important;box-shadow:0 18px 54px rgba(23,21,16,.095)!important}
+.action-card h3{font-size:25px!important;letter-spacing:-.7px!important}
+.action-card p{color:var(--muted)!important;line-height:1.6!important;font-size:14px!important}
+.action-icon{width:42px!important;height:42px!important;border-radius:13px!important;background:var(--ink)!important;color:#fff!important;display:flex!important;align-items:center!important;justify-content:center!important;font-size:22px!important;font-weight:900!important}
+.action-button{margin-top:auto!important;width:max-content!important;border:0!important;border-radius:999px!important;background:var(--ink)!important;color:#fff!important;padding:12px 18px!important;font-weight:900!important;cursor:pointer!important}
+.context-pills{display:flex!important;gap:8px!important;flex-wrap:wrap!important;margin-top:auto!important}
+.context-pills span{border-radius:999px!important;background:#f0eee7!important;padding:8px 10px!important;font-size:12px!important;font-weight:800!important;color:var(--muted)!important}
+.panel-card{padding:0!important;overflow:hidden!important}
+.panel-head{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:20px!important;padding:20px 22px!important;border-bottom:1px solid var(--line)!important}
+.panel-head h3{font-size:18px!important;letter-spacing:-.25px!important;margin-top:5px!important}
+.trade-list:empty::before,#today-list:empty::before{
+  content:"No trades yet\\A Tap + Log to record your first setup.";
+  white-space:pre;display:flex;align-items:center;justify-content:center;text-align:center;min-height:126px;color:var(--faint);font-weight:700;line-height:1.8;
+}
+#equity-svg{min-height:270px!important;padding:18px!important}
+
+/* Gamma page light terminal */
+.gamma-page-shell{display:flex!important;flex-direction:column!important;gap:18px!important}
+.gamma-market-card{display:grid!important;grid-template-columns:1.3fr .7fr!important;gap:22px!important;padding:26px!important}
+.gamma-market-card h2{font-size:32px!important;letter-spacing:-.9px!important;line-height:1.15!important;margin:8px 0 10px!important}
+.gamma-market-card p{color:var(--muted)!important;line-height:1.7!important;font-size:15px!important}
+.market-grid{display:grid!important;grid-template-columns:1fr 1fr!important;gap:12px!important}
+.gamma-mini{background:#fff!important;border:1px solid var(--line)!important;border-radius:16px!important;padding:15px!important}
+.gamma-mini span{display:block!important;font-size:10px!important;letter-spacing:.14em!important;text-transform:uppercase!important;color:var(--faint)!important;font-weight:900!important;margin-bottom:8px!important}
+.gamma-mini strong{font-size:19px!important;letter-spacing:-.4px!important}
+.gamma-chart-card{overflow:hidden!important}
+.gamma-chart-head{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:18px!important;padding:22px 24px!important;border-bottom:1px solid var(--line)!important}
+.gamma-chart-head h2{font-size:25px!important;letter-spacing:-.6px!important;margin:6px 0!important}
+.gamma-chart-head p{color:var(--faint)!important;font-size:13px!important;font-weight:700!important}
+.gamma-controls{display:flex!important;gap:9px!important;align-items:flex-end!important;flex-wrap:wrap!important}
+.gamma-controls label{display:flex!important;flex-direction:column!important;gap:6px!important}
+.gamma-controls label span{font-size:10px!important;letter-spacing:.13em!important;text-transform:uppercase!important;color:var(--faint)!important;font-weight:900!important}
+.gamma-controls select,.control-btn{
+  height:40px!important;border-radius:12px!important;border:1px solid var(--line2)!important;background:#f0eee7!important;color:var(--muted)!important;padding:0 12px!important;font-size:12px!important;font-weight:900!important;outline:0!important;cursor:pointer!important;
+}
+.control-btn.primary{background:var(--ink)!important;color:#fff!important;border-color:var(--ink)!important}
+.gamma-status-strip{margin:0!important;border-radius:0!important;border:0!important;border-bottom:1px solid var(--line)!important;background:#fbfaf7!important;padding:13px 24px!important;color:var(--muted)!important;font-weight:800!important}
+.gamma-map-wrap{position:relative!important;background:linear-gradient(180deg,#fff,#fbfaf7)!important}
+.gamma-map{height:640px!important;width:100%!important;background:#fbfaf7!important}
+.gamma-hidden-status{display:none!important}
+.gamma-legend-manual{
+  position:absolute!important;left:22px!important;top:22px!important;z-index:6!important;
+  background:rgba(255,255,255,.88)!important;backdrop-filter:blur(16px)!important;border:1px solid var(--line)!important;border-radius:14px!important;padding:11px 13px!important;box-shadow:var(--shadow-soft)!important;
+}
+.gamma-legend-manual div{display:flex!important;align-items:center!important;gap:9px!important;font-size:12px!important;color:var(--muted)!important;font-weight:800!important;line-height:1.9!important}
+.gamma-swatch{display:inline-block!important;width:28px!important;height:8px!important;border-radius:99px!important}
+.gamma-swatch.yellow{background:#facc15!important}.gamma-swatch.green{background:var(--green)!important}.gamma-swatch.red{background:var(--red)!important}.gamma-swatch.purple{background:var(--purple)!important}
+.gamma-level-grid{display:grid!important;grid-template-columns:repeat(4,1fr)!important;gap:14px!important}
+.level-card{padding:20px!important;border-top:5px solid var(--line2)!important}
+.level-card strong{display:block!important;font-size:31px!important;letter-spacing:-1px!important;margin:9px 0!important}
+.level-card span{display:block!important;font-weight:900!important;color:var(--ink)!important;margin-bottom:8px!important}
+.level-card small{color:var(--muted)!important;line-height:1.5!important;font-size:12px!important}
+.level-call{border-top-color:var(--green)!important}.level-call strong{color:var(--green)!important}
+.level-put{border-top-color:var(--red)!important}.level-put strong{color:var(--red)!important}
+.level-flip{border-top-color:var(--purple)!important}.level-flip strong{color:var(--purple)!important}
+.level-range{border-top-color:#777069!important}
+.gamma-education-grid{display:grid!important;grid-template-columns:repeat(3,1fr)!important;gap:14px!important}
+.gamma-education-grid article{padding:22px!important}
+.gamma-education-grid h3{font-size:20px!important;margin:10px 0 8px!important}
+.gamma-education-grid p{color:var(--muted)!important;font-size:14px!important;line-height:1.65!important}
+.gamma-education-grid b{display:block!important;margin-top:12px!important;font-size:13px!important}
+.ed-icon{width:34px!important;height:6px!important;border-radius:99px!important}.ed-icon.green{background:var(--green)!important}.ed-icon.red{background:var(--red)!important}.ed-icon.purple{background:var(--purple)!important}
+
+/* General page polish */
+.form-card{overflow:hidden!important}.form-section{padding:22px 24px!important;border-bottom:1px solid var(--line)!important}.form-input,.form-textarea{background:#f0eee7!important;border:1px solid var(--line2)!important;border-radius:14px!important}
+.filter-row{display:flex!important;gap:8px!important;flex-wrap:wrap!important;margin-bottom:14px!important}.filter-chip{border-radius:999px!important;border:1px solid var(--line)!important;background:#fff!important;padding:10px 14px!important;font-weight:900!important;color:var(--muted)!important}.filter-chip.active{background:var(--ink)!important;color:#fff!important}
+
+@media(max-width:900px){
+  .topbar{padding:18px!important}.scroll-area{padding:18px 16px 124px!important}
+  .session-summary-card,.gamma-market-card,.gamma-chart-head{grid-template-columns:1fr!important;display:grid!important}
+  .summary-metric{align-items:flex-start!important;text-align:left!important}
+  .stats-strip,.today-action-grid,.gamma-level-grid,.gamma-education-grid,.market-grid{grid-template-columns:1fr!important}
+  .gamma-map{height:520px!important}
+  .tab-bar{height:72px!important;grid-template-columns:repeat(3,1fr)!important;border-radius:26px!important}
+  #tab-log{margin-top:0!important;height:50px!important}
+}
+</style>
+
+
+<style id="gamma-custom-pro-ui">
+/* Customizable Gamma Lens polish */
+.gamma-page-shell{display:flex!important;flex-direction:column!important;gap:18px!important}
+.gamma-market-card{
+  display:grid!important;grid-template-columns:1.25fr .75fr!important;gap:22px!important;padding:26px!important;
+  background:linear-gradient(145deg,#fff,#fbfaf7)!important;
+}
+.gamma-market-card h2{font-size:33px!important;letter-spacing:-1px!important;line-height:1.12!important;margin:8px 0 10px!important}
+.gamma-market-card p{color:var(--muted)!important;line-height:1.7!important;font-size:15px!important}
+.gamma-pill-row{display:flex!important;gap:8px!important;flex-wrap:wrap!important;margin-top:16px!important}
+.gamma-pill-row span{border:1px solid var(--line)!important;background:#fff!important;border-radius:999px!important;padding:8px 10px!important;font-size:11px!important;font-weight:900!important;color:var(--muted)!important}
+#gamma-current-exp-pill{background:var(--ink)!important;color:#fff!important;border-color:var(--ink)!important}
+#gamma-api-pill{background:var(--green2)!important;color:var(--green)!important;border-color:var(--green3)!important}
+.market-grid{display:grid!important;grid-template-columns:1fr 1fr!important;gap:12px!important}
+.gamma-mini{background:#fff!important;border:1px solid var(--line)!important;border-radius:16px!important;padding:15px!important;box-shadow:0 6px 18px rgba(23,21,16,.035)!important}
+.gamma-mini span{display:block!important;font-size:10px!important;letter-spacing:.14em!important;text-transform:uppercase!important;color:var(--faint)!important;font-weight:900!important;margin-bottom:8px!important}
+.gamma-mini strong{font-size:20px!important;letter-spacing:-.5px!important}
+.gamma-chart-card{overflow:hidden!important;background:#fff!important}
+.gamma-chart-head{display:flex!important;align-items:flex-start!important;justify-content:space-between!important;gap:18px!important;padding:22px 24px!important;border-bottom:1px solid var(--line)!important}
+.gamma-chart-head h2{font-size:26px!important;letter-spacing:-.7px!important;margin:6px 0!important}
+.gamma-chart-head p{color:var(--faint)!important;font-size:13px!important;font-weight:700!important}
+.gamma-controls{display:flex!important;gap:9px!important;align-items:flex-end!important;flex-wrap:wrap!important;justify-content:flex-end!important}
+.gamma-controls label{display:flex!important;flex-direction:column!important;gap:6px!important}
+.gamma-controls label span,.advanced-grid label span{font-size:10px!important;letter-spacing:.13em!important;text-transform:uppercase!important;color:var(--faint)!important;font-weight:900!important}
+.gamma-controls select,.gamma-controls input,.control-btn,.advanced-grid select,.advanced-grid input,.advanced-grid button{
+  height:40px!important;border-radius:12px!important;border:1px solid var(--line2)!important;background:#f0eee7!important;color:var(--muted)!important;
+  padding:0 12px!important;font-size:12px!important;font-weight:900!important;outline:0!important;cursor:pointer!important;
+}
+.custom-range-field{display:none!important}
+.custom-range-field.show{display:flex!important}
+.custom-range-field input{width:84px!important}
+.control-btn.primary{background:var(--ink)!important;color:#fff!important;border-color:var(--ink)!important}
+.gamma-advanced{display:none!important;padding:18px 24px!important;border-bottom:1px solid var(--line)!important;background:#fbfaf7!important}
+.gamma-advanced.open{display:block!important}
+.advanced-grid{display:grid!important;grid-template-columns:repeat(6,1fr)!important;gap:12px!important}
+.advanced-grid label{display:flex!important;flex-direction:column!important;gap:7px!important}
+.advanced-grid button{background:#fff!important}
+.advanced-grid input[type="range"]{padding:0!important;width:100%!important}
+.gamma-status-strip{background:#fbfaf7!important;border-bottom:1px solid var(--line)!important;padding:13px 24px!important;color:var(--muted)!important;font-weight:850!important}
+.gamma-map-wrap{position:relative!important;background:linear-gradient(180deg,#fff,#fbfaf7)!important}
+.gamma-map{width:100%!important;background:#fbfaf7!important;transition:height .22s ease!important}
+.gamma-map.height-compact{height:480px!important}
+.gamma-map.height-standard{height:640px!important}
+.gamma-map.height-large{height:760px!important}
+.gamma-map.height-full{height:calc(100vh - 230px)!important;min-height:720px!important}
+.gamma-chart-card.bookmap-mode{background:#0b0c10!important;border-color:rgba(255,255,255,.08)!important}
+.gamma-chart-card.bookmap-mode .gamma-chart-head,
+.gamma-chart-card.bookmap-mode .gamma-advanced,
+.gamma-chart-card.bookmap-mode .gamma-status-strip{background:#101218!important;border-color:rgba(255,255,255,.08)!important;color:rgba(255,255,255,.78)!important}
+.gamma-chart-card.bookmap-mode .eyebrow,
+.gamma-chart-card.bookmap-mode .gamma-chart-head p,
+.gamma-chart-card.bookmap-mode .gamma-controls label span,
+.gamma-chart-card.bookmap-mode .advanced-grid label span{color:rgba(255,255,255,.48)!important}
+.gamma-chart-card.bookmap-mode .gamma-chart-head h2{color:#fff!important}
+.gamma-chart-card.bookmap-mode .gamma-map-wrap,.gamma-chart-card.bookmap-mode .gamma-map{background:#0b0c10!important}
+.gamma-chart-card.bookmap-mode .gamma-controls select,
+.gamma-chart-card.bookmap-mode .gamma-controls input,
+.gamma-chart-card.bookmap-mode .control-btn,
+.gamma-chart-card.bookmap-mode .advanced-grid select,
+.gamma-chart-card.bookmap-mode .advanced-grid button{background:#171922!important;color:rgba(255,255,255,.80)!important;border-color:rgba(255,255,255,.12)!important}
+.gamma-legend-manual{
+  position:absolute!important;left:22px!important;top:22px!important;z-index:6!important;background:rgba(255,255,255,.88)!important;backdrop-filter:blur(16px)!important;
+  border:1px solid var(--line)!important;border-radius:14px!important;padding:11px 13px!important;box-shadow:var(--shadow-soft)!important;
+}
+.bookmap-mode .gamma-legend-manual{background:rgba(10,12,16,.78)!important;border-color:rgba(255,255,255,.10)!important;color:rgba(255,255,255,.82)!important}
+.gamma-legend-manual div{display:flex!important;align-items:center!important;gap:9px!important;font-size:12px!important;color:var(--muted)!important;font-weight:800!important;line-height:1.9!important}
+.bookmap-mode .gamma-legend-manual div{color:rgba(255,255,255,.82)!important}
+.gamma-swatch{display:inline-block!important;width:28px!important;height:8px!important;border-radius:99px!important}
+.gamma-swatch.yellow{background:#facc15!important}.gamma-swatch.green{background:var(--green)!important}.gamma-swatch.red{background:var(--red)!important}.gamma-swatch.purple{background:var(--purple)!important}
+.gamma-level-grid{display:grid!important;grid-template-columns:repeat(4,1fr)!important;gap:14px!important}
+.level-card{padding:20px!important;border-top:5px solid var(--line2)!important}
+.level-card strong{display:block!important;font-size:30px!important;letter-spacing:-1px!important;margin:9px 0!important}
+.level-card span{display:block!important;font-weight:900!important;color:var(--ink)!important;margin-bottom:8px!important}
+.level-card small{color:var(--muted)!important;line-height:1.5!important;font-size:12px!important}
+.level-call{border-top-color:var(--green)!important}.level-call strong{color:var(--green)!important}
+.level-put{border-top-color:var(--red)!important}.level-put strong{color:var(--red)!important}
+.level-flip{border-top-color:var(--purple)!important}.level-flip strong{color:var(--purple)!important}
+.level-net{border-top-color:#0f766e!important}.level-range{border-top-color:#777069!important}.level-spot{border-top-color:#2563eb!important}.level-closest{border-top-color:#d97706!important}.level-regime{border-top-color:#111827!important}
+.orderflow-guide{display:grid!important;grid-template-columns:.8fr 1.2fr!important;gap:18px!important;background:#fff!important;border:1px solid var(--line)!important;border-radius:var(--radius)!important;box-shadow:var(--shadow)!important;padding:26px!important}
+.orderflow-guide h2{font-size:28px!important;letter-spacing:-.8px!important;margin:8px 0!important}
+.orderflow-guide p{color:var(--muted)!important;line-height:1.7!important}
+.guide-grid{display:grid!important;grid-template-columns:1fr 1fr!important;gap:12px!important}
+.guide-grid article{background:#fbfaf7!important;border:1px solid var(--line)!important;border-radius:16px!important;padding:16px!important}
+.guide-grid b{display:block!important;margin-bottom:6px!important}
+.guide-grid p{font-size:13px!important;line-height:1.55!important}
+@media(max-width:1050px){
+  .gamma-market-card,.gamma-chart-head,.orderflow-guide{grid-template-columns:1fr!important;display:grid!important}
+  .advanced-grid{grid-template-columns:repeat(3,1fr)!important}
+  .gamma-level-grid{grid-template-columns:1fr 1fr!important}
+}
+@media(max-width:720px){
+  .market-grid,.gamma-level-grid,.guide-grid,.advanced-grid{grid-template-columns:1fr!important}
+  .gamma-map.height-standard,.gamma-map.height-large,.gamma-map.height-full{height:520px!important}
+}
+</style>
+
+
+<style id="gamma-logic-fixed-ui">
+.gamma-controls{align-items:end!important}
+.gamma-controls label{min-width:150px!important}
+.gamma-controls select{min-width:150px!important}
+#gamma-reload-btn{min-width:96px!important}
+.gamma-debug-panel{margin-top:0!important}
+.gamma-map-wrap{min-height:520px!important}
+.gamma-no-data.show{z-index:9;background:rgba(255,255,255,.72);backdrop-filter:blur(4px)}
+</style>
+
+
+<style id="qqq-to-nq-gamma-ui">
+.gamma-source-note{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  margin-top:10px;
+  border:1px solid var(--line);
+  background:#fff;
+  color:var(--muted);
+  border-radius:999px;
+  padding:8px 11px;
+  font-size:11px;
+  font-weight:900;
+}
+.level-card em{
+  display:block;
+  margin-top:5px;
+  font-style:normal;
+  color:var(--faint);
+  font-size:12px;
+  font-weight:800;
+}
+.gamma-debug-item strong{
+  font-size:12px!important;
+}
+</style>
+
+
+
+
+
+<style id="gamma-curve-visual-fix-ui">
+.gamma-map.height-standard,
+.gamma-map{
+  height:620px!important;
+  min-height:620px!important;
+}
+.gamma-map-wrap{
+  background:#fbfaf7!important;
+}
+.gamma-legend-manual{
+  display:none!important;
+}
+.gamma-no-data.show{
+  z-index:9;
+  background:rgba(255,255,255,.72);
+  backdrop-filter:blur(4px);
+}
+@media(max-width:760px){
+  .gamma-map.height-standard,.gamma-map{height:540px!important;min-height:540px!important}
+}
+</style>
+
+
+<style id="gamma-stable-layout-fix">
+.scroll-area{padding-bottom:140px!important}
+#page-gamma{padding-bottom:120px!important}
+.gamma-page-shell{gap:14px!important}
+.gamma-market-card{margin-top:0!important;padding:20px!important;grid-template-columns:1fr!important}
+.gamma-market-card h2{font-size:28px!important;margin:6px 0 6px!important}
+.market-grid{grid-template-columns:repeat(4,1fr)!important}
+.gamma-chart-card{margin-top:0!important}
+.gamma-chart-head{padding:16px 18px!important;align-items:center!important}
+.gamma-chart-head h2{font-size:22px!important;margin:4px 0!important}
+.gamma-controls{display:flex!important;flex-wrap:nowrap!important;gap:8px!important;align-items:flex-end!important;justify-content:flex-end!important}
+.gamma-controls label{min-width:130px!important;max-width:170px!important}
+.gamma-controls select{width:100%!important;min-width:0!important;height:38px!important}
+#gamma-reload-btn{height:38px!important;min-width:92px!important;white-space:nowrap!important}
+.gamma-map,.gamma-map.height-standard{height:520px!important;min-height:520px!important}
+.gamma-map-wrap{min-height:520px!important}
+.gamma-status-strip{padding:10px 18px!important;font-size:11px!important}
+.gamma-level-grid{grid-template-columns:repeat(4,1fr)!important;gap:12px!important}
+.level-card{padding:16px!important}
+.level-card strong{font-size:25px!important}
+.orderflow-guide{margin-bottom:20px!important}
+@media(max-width:900px){
+  .market-grid,.gamma-level-grid{grid-template-columns:1fr 1fr!important}
+  .gamma-chart-head{display:block!important}
+  .gamma-controls{margin-top:12px!important;justify-content:flex-start!important;flex-wrap:wrap!important}
+}
+@media(max-width:640px){
+  .market-grid,.gamma-level-grid{grid-template-columns:1fr!important}
+  .gamma-map,.gamma-map.height-standard{height:460px!important;min-height:460px!important}
+}
+</style>
+
+
+<style id="gamma-3d-terrain-impl-ui">
+.gamma-map,.gamma-map.height-standard{
+  height:650px!important;
+  min-height:650px!important;
+}
+.gamma-map-wrap{
+  min-height:650px!important;
+  background:#fbfaf7!important;
+}
+.gamma-legend-manual{display:none!important}
+@media(max-width:760px){
+  .gamma-map,.gamma-map.height-standard{height:560px!important;min-height:560px!important}
+  .gamma-map-wrap{min-height:560px!important}
+}
+</style>
+
+
+<style id="gamma-3d-axis-fix-ui">
+.gamma-map,.gamma-map.height-standard{height:650px!important;min-height:650px!important}
+.gamma-map-wrap{min-height:650px!important;background:#fbfaf7!important}
+.gamma-legend-manual{display:none!important}
+@media(max-width:760px){
+  .gamma-map,.gamma-map.height-standard{height:560px!important;min-height:560px!important}
+  .gamma-map-wrap{min-height:560px!important}
+}
+</style>
+
+
+
+
+
+<style id="gamma-flat-gex-mode-ui">
+.gamma-bar-mode .gamma-map-wrap{
+  background:#151a21!important;
+  border-color:rgba(255,255,255,.08)!important;
+}
+.gamma-bar-mode .gamma-status-strip{
+  background:#151a21!important;
+  color:#a8b3c5!important;
+  border-color:rgba(255,255,255,.08)!important;
+}
+.gamma-bar-mode #gamma-chart{
+  background:#151a21!important;
+}
+.gamma-controls label.chart-type-field{min-width:160px!important}
+</style>
+
+
+<style id="upload-audio-polish-fix">
+.ss-drop.dragover,
+.audio-drop.dragover{
+  border-color:#1a1814!important;
+  background:#f8f7f2!important;
+  box-shadow:0 0 0 4px rgba(26,24,18,.06), 0 14px 40px rgba(26,24,18,.08)!important;
+  transform:translateY(-1px);
+}
+.ss-drop,
+.audio-drop{
+  transition:border-color .16s ease, background .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+</style>
+
+
+<style id="history-modal-polish-fix">
+.history-day-group{
+  background:#fff;
+  border:1px solid rgba(26,24,18,.08);
+  border-radius:24px;
+  overflow:hidden;
+  box-shadow:0 18px 50px rgba(26,24,18,.06);
+  margin-bottom:22px;
+}
+.history-day-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:16px 22px;
+  border-bottom:1px solid rgba(26,24,18,.08);
+  background:linear-gradient(180deg,#fff,#fbfaf7);
+}
+.history-day-title{
+  font-family:var(--serif);
+  font-size:22px;
+  line-height:1;
+  color:var(--text);
+}
+.history-day-sub{
+  margin-top:4px;
+  font-size:12px;
+  color:var(--text3);
+  font-weight:600;
+}
+.history-day-pnl{
+  font-size:18px;
+  font-weight:800;
+}
+.history-day-pnl.pos{color:var(--green)}
+.history-day-pnl.neg{color:var(--red)}
+
+.trade-actions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-top:10px;
+}
+.trade-action-btn{
+  border:1px solid rgba(26,24,18,.12);
+  background:#fff;
+  color:#1a1814;
+  border-radius:999px;
+  padding:7px 12px;
+  font-size:12px;
+  font-weight:800;
+  cursor:pointer;
+  transition:.15s ease;
+  font-family:var(--sans);
+}
+.trade-action-btn:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(26,24,18,.08)}
+.trade-action-btn.edit{background:#1a1814;color:#fff;border-color:#1a1814}
+.trade-action-btn.delete{background:#fff1f2;color:#be123c;border-color:#fecdd3}
+
+#modal-body > .trade-actions,
+.modal-body-inner > .trade-actions{
+  display:none!important;
+}
+.modal-footer{gap:10px!important}
+.modal-footer .btn,
+.modal-footer .trade-action-btn{
+  min-width:120px;
+  border-radius:14px!important;
+  padding:12px 16px!important;
+  font-size:14px!important;
+}
+#modal-del{
+  background:#fff1f2!important;
+  color:#be123c!important;
+  border:1px solid #fecdd3!important;
+  font-weight:800!important;
+}
+#modal-edit{
+  background:#1a1814!important;
+  color:#fff!important;
+  border:1px solid #1a1814!important;
+  font-weight:800!important;
+}
+.modal-sheet{overflow:hidden}
+.modal-body-inner{padding-top:18px}
+</style>
+
+
+<style id="modal-dragdrop-final-fix">
+/* trade modal cleanup */
+#modal-body > .trade-actions{display:none!important}
+#modal-body .grid.grid-3{
+  display:grid!important;
+  grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  gap:14px!important;
+  margin-bottom:20px!important;
+}
+#modal-body .grid.grid-3 .card{
+  min-height:106px!important;
+  padding:22px 24px!important;
+  border-radius:22px!important;
+  overflow:hidden!important;
+  box-shadow:0 14px 34px rgba(26,24,18,.05)!important;
+}
+#modal-body .grid.grid-3 .card-label{
+  position:static!important;
+  display:block!important;
+  margin:0 0 8px!important;
+  font-size:12px!important;
+  line-height:1!important;
+  letter-spacing:1.5px!important;
+  color:var(--text3)!important;
+}
+#modal-body .grid.grid-3 .level-val{
+  font-size:40px!important;
+  line-height:1.05!important;
+  white-space:nowrap!important;
+}
+#modal-body .modal-section{
+  padding:18px 0!important;
+  border-top:1px solid rgba(26,24,18,.08)!important;
+}
+#modal-body .modal-section .card-label{
+  position:static!important;
+  margin-bottom:10px!important;
+}
+.modal-footer{
+  gap:12px!important;
+  padding:22px 28px!important;
+}
+#modal-del,#modal-edit,.modal-footer .btn{
+  min-width:128px!important;
+  border-radius:16px!important;
+  padding:14px 16px!important;
+  font-weight:800!important;
+}
+
+/* upload boxes */
+.ss-drop.dragover,
+.audio-drop.dragover{
+  border-color:#1a1814!important;
+  background:#fbfaf6!important;
+  box-shadow:0 0 0 5px rgba(26,24,18,.06),0 16px 44px rgba(26,24,18,.10)!important;
+  transform:translateY(-1px)!important;
+}
+.ss-drop,.audio-drop{
+  transition:border-color .16s ease,background .16s ease,box-shadow .16s ease,transform .16s ease;
+}
+.ss-drop::after{
+  content:"Drop screenshots here";
+  display:block;
+  margin-top:6px;
+  font-size:11px;
+  color:var(--text3);
+  opacity:.85;
+}
+</style>
+
 </head>
 <body>
-  <div id="root"></div>
-  <script type="module" src="/src/main.jsx"></script>
+<div class="app">
+  <header class="topbar">
+    <div><div class="brand-kicker" id="top-date">EdgeFlow</div><div class="page-title" id="page-title">Today's Session</div></div>
+    <div class="status-row"><span class="status-badge warn" id="session-badge">Loading...</span><span class="status-badge" id="db-badge">Checking Supabase...</span></div>
+  </header>
+
+  <main class="scroll-area">
+
+    <section class="page active" id="page-today">
+      <div class="dashboard-shell">
+        <section class="session-summary-card">
+          <div class="summary-copy">
+            <div class="eyebrow">Today's Session</div>
+            <h2 id="today-session-title">NQ Order Flow Journal</h2>
+            <p id="today-session-sub">Track execution, screenshots, psychology, and gamma context in one clean workflow.</p>
+          </div>
+          <div class="summary-metric">
+            <span>Net P&L Today</span>
+            <strong id="today-pnl">—</strong>
+            <small id="today-sub">No trades yet</small>
+          </div>
+        </section>
+
+        <section class="stats-strip">
+          <div class="stat-tile"><span>Win Rate</span><strong id="today-wr">—</strong><small>Session quality</small></div>
+          <div class="stat-tile"><span>Total R</span><strong id="today-r">—</strong><small>Risk-adjusted</small></div>
+          <div class="stat-tile"><span>Trades</span><strong id="today-count">0</strong><small>Daily cap</small></div>
+        </section>
+
+        <section class="today-action-grid">
+          <div class="action-card primary-action" onclick="navTo('log')">
+            <div class="action-icon">＋</div>
+            <div>
+              <div class="eyebrow">Quick Log</div>
+              <h3>Log a Trade</h3>
+              <p>Record setup, screenshots, execution, and psychology.</p>
+            </div>
+            <button class="action-button">+ Log Trade</button>
+          </div>
+
+          <div class="action-card context-card">
+            <div class="eyebrow">Session Notes / Market Context</div>
+            <h3>Plan the trade. Trade the plan.</h3>
+            <p>Prime window, core confluences, and execution notes stay visible so the journal feels intentional.</p>
+            <div class="context-pills">
+              <span>Bookmap</span><span>CVD</span><span>HTF POI</span><span>Absorption</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel-card full-width">
+          <div class="panel-head">
+            <div><span class="eyebrow">Today's Trades</span><h3>Trades taken today</h3></div>
+            <button class="link-btn" onclick="navTo('history')">All trades →</button>
+          </div>
+          <div class="trade-list" id="today-list"></div>
+        </section>
+
+        <section class="panel-card full-width" id="equity-card">
+          <div class="panel-head">
+            <div><span class="eyebrow">Equity Curve</span><h3>Session performance</h3></div>
+            <div class="muted" id="equity-meta">—</div>
+          </div>
+          <div id="equity-svg"></div>
+        </section>
+      </div>
+    </section>
+
+
+    <section class="page" id="page-history">
+      <div class="filter-row" id="filters">
+        <button class="filter-chip active" onclick="setFilter('all',this)">All</button><button class="filter-chip" onclick="setFilter('win',this)">Wins</button><button class="filter-chip" onclick="setFilter('loss',this)">Losses</button><button class="filter-chip" onclick="setFilter('prime',this)">Prime</button><button class="filter-chip" onclick="setFilter('good',this)">Good</button><button class="filter-chip" onclick="setFilter('violation',this)">Rule Breaks</button>
+      </div>
+      <div class="card"><div class="trade-list" id="history-list"></div></div>
+    </section>
+
+    <section class="page" id="page-log">
+      <div class="form-card">
+        <div class="card-header"><div><div class="card-label">New Trade Entry</div><h2>Full Trade Workflow</h2></div><button class="btn btn-ghost" onclick="clearForm()">Clear</button></div>
+        <div class="form-section"><div class="form-row">
+          <div class="form-group"><div class="form-label">Date</div><input class="form-input" type="date" id="f-date"></div>
+          <div class="form-group"><div class="form-label">Time</div><input class="form-input" type="time" id="f-time"></div>
+          <div class="form-group"><div class="form-label">Direction</div><div class="btg"><button class="btt" data-g="direction" data-v="Long" onclick="pickToggle(this)">Long</button><button class="btt" data-g="direction" data-v="Short" onclick="pickToggle(this)">Short</button></div></div>
+          <div class="form-group"><div class="form-label">Session</div><div class="pill" id="form-session">—</div></div>
+        </div></div>
+
+        <div class="form-section">
+          <div class="form-label">Confluences · all four required</div>
+          <div class="btg" id="conf-btg" style="margin-top:8px">
+            <button class="btt sel-core" data-core="1" data-v="Bookmap Stack" onclick="toggleConf(this)">Bookmap ★</button><button class="btt sel-core" data-core="1" data-v="CVD Divergence" onclick="toggleConf(this)">CVD ★</button><button class="btt sel-core" data-core="1" data-v="HTF POI" onclick="toggleConf(this)">HTF POI ★</button><button class="btt sel-core" data-core="1" data-v="Absorption" onclick="toggleConf(this)">Absorption ★</button>
+          </div>
+          <div class="core-warn" id="core-warn">Missing core confluence.</div>
+          <div class="form-label" style="margin-top:16px">HTF POI Type</div>
+          <div class="btg" style="margin-top:8px"><button class="btt" data-g="poi_type" data-v="Rejection Block" onclick="pickToggle(this)">Rejection Block</button><button class="btt" data-g="poi_type" data-v="FVG" onclick="pickToggle(this)">FVG</button><button class="btt" data-g="poi_type" data-v="Prior Session Level" onclick="pickToggle(this)">Prior Session Level</button><button class="btt" data-g="poi_type" data-v="Prior Day Level" onclick="pickToggle(this)">Prior Day Level</button></div>
+          <div class="form-label" style="margin-top:16px">Setup</div>
+          <div class="btg" id="setup-btg" style="margin-top:8px"><button class="btt" data-g="setup" data-v="1" onclick="pickToggle(this)">1 · Long Reversal</button><button class="btt" data-g="setup" data-v="2" onclick="pickToggle(this)">2 · Long Continuation</button><button class="btt" data-g="setup" data-v="3" onclick="pickToggle(this)">3 · Short Reversal</button><button class="btt" data-g="setup" data-v="4" onclick="pickToggle(this)">4 · Short Continuation</button></div>
+        </div>
+
+        <div class="form-section"><div class="form-row">
+          <div class="form-group"><div class="form-label">Outcome</div><div class="btg"><button class="btt" data-g="outcome" data-v="Win" onclick="pickToggle(this)">Win</button><button class="btt" data-g="outcome" data-v="Loss" onclick="pickToggle(this)">Loss</button><button class="btt" data-g="outcome" data-v="Break Even" onclick="pickToggle(this)">BE</button></div></div>
+          <div class="form-group"><div class="form-label">R Result</div><input class="form-input" type="number" id="f-r" step=".1" placeholder="+2.0"></div>
+          <div class="form-group"><div class="form-label">P&L ($)</div><input class="form-input" type="number" id="f-pnl" placeholder="+400"></div>
+          <div class="form-group"><div class="form-label">Played Out?</div><div class="btg"><button class="btt" data-g="played_out" data-v="Yes" onclick="pickToggle(this)">Yes</button><button class="btt" data-g="played_out" data-v="Partial" onclick="pickToggle(this)">Partial</button><button class="btt" data-g="played_out" data-v="No" onclick="pickToggle(this)">No</button></div></div>
+        </div></div>
+
+        <div class="form-section">
+          <div class="form-group"><div class="form-label">Why I took this trade *</div><textarea class="form-textarea" id="f-why" placeholder="What did you see? CVD divergence, absorption candle, Bookmap wall, HTF level..."></textarea></div>
+          <div class="form-label" style="margin-top:14px">State of Mind</div>
+          <div class="btg" style="margin-top:8px"><button class="btt" data-g="emotion" data-v="Calm" onclick="pickToggle(this)">Calm</button><button class="btt" data-g="emotion" data-v="Confident" onclick="pickToggle(this)">Confident</button><button class="btt" data-g="emotion" data-v="Impulsive" onclick="pickToggle(this)">Impulsive</button><button class="btt" data-g="emotion" data-v="FOMO" onclick="pickToggle(this)">FOMO</button><button class="btt" data-g="emotion" data-v="Revenge" onclick="pickToggle(this)">Revenge</button></div>
+          <div class="form-group" style="margin-top:14px"><div class="form-label">Notes / Mistakes</div><textarea class="form-textarea" id="f-notes" placeholder="Anything worth remembering."></textarea></div>
+        </div>
+
+        <div class="form-section">
+          <div class="form-label">Screenshots</div>
+          <div class="grid grid-3" style="margin-top:10px">
+            <div><div class="form-label">Order Flow</div><div class="ss-drop" onclick="document.getElementById('f-ss-of').click()"><input hidden type="file" id="f-ss-of" multiple accept="image/*" onchange="handleSS(this,'of')"><b>Footprint / CVD</b><br><span class="muted">PNG, JPG</span></div><div class="ss-previews" id="ss-previews-of"></div></div>
+            <div><div class="form-label">Bookmap</div><div class="ss-drop" onclick="document.getElementById('f-ss-bm').click()"><input hidden type="file" id="f-ss-bm" multiple accept="image/*" onchange="handleSS(this,'bm')"><b>Bookmap heatmap</b><br><span class="muted">PNG, JPG</span></div><div class="ss-previews" id="ss-previews-bm"></div></div>
+            <div><div class="form-label">Other</div><div class="ss-drop" onclick="document.getElementById('f-ss').click()"><input hidden type="file" id="f-ss" multiple accept="image/*" onchange="handleSS(this,'other')"><b>Chart / Notes</b><br><span class="muted">multiple files</span></div><div class="ss-previews" id="ss-previews"></div></div>
+          </div>
+        </div>
+        <div class="form-actions"><button class="btn btn-ghost" id="cancel-edit-btn" style="display:none" onclick="cancelEdit()">Cancel</button><button class="btn btn-primary" id="save-btn" onclick="saveTrade()">Save Trade</button></div>
+      </div>
+    </section>
+
+
+
+    <section class="page" id="page-gamma">
+      <div class="gamma-page-shell">
+        <section class="gamma-market-card" id="gamma-market-read">
+          <div class="market-left">
+            <div class="eyebrow">Gamma Lens</div>
+            <h2 id="gamma-read-title">Loading gamma read...</h2>
+            <p id="gamma-read-text">This page uses QQQ options gamma and translates it into NQ-equivalent levels using the live NQ ÷ QQQ ratio. These are not native NQ options levels.</p>
+            <div class="gamma-pill-row">
+              <span id="gamma-current-exp-pill">0DTE</span>
+              <span id="gamma-api-pill">Live API</span>
+              <span id="gamma-regime-pill">Regime: —</span>
+            </div>
+          </div>
+          <div class="market-grid">
+            <div class="gamma-mini"><span>Current NQ</span><strong id="gamma-nq-ref">—</strong></div>
+            <div class="gamma-mini"><span>Net GEX</span><strong id="gamma-net-gex">—</strong></div>
+            <div class="gamma-mini"><span>Reaction Bias</span><strong id="gamma-reaction-bias">—</strong></div>
+            <div class="gamma-mini"><span>Closest Level</span><strong id="gamma-closest-level">—</strong></div>
+          </div>
+        </section>
+
+        <section class="gamma-chart-card" id="gamma-chart-card">
+          <div class="gamma-chart-head">
+            <div>
+              <div class="eyebrow">3D Gamma Exposure Surface</div>
+              <h2>QQQ → NQ 3D Gamma Surface</h2>
+              <p>Drag to rotate · Scroll to zoom · Shift + drag to pan</p>
+            </div>
+            <div class="gamma-controls">
+              <label><span>Expiration</span><select id="gamma-expiration" onchange="setGammaExpiration(this.value)">
+                <option value="0">0DTE</option><option value="1">1DTE</option><option value="2">2DTE</option><option value="3">3DTE</option>
+                <option value="5">5DTE</option><option value="7">7DTE</option><option value="14">14DTE</option>
+              </select></label>
+              
+              
+              <label><span>Color</span><select id="gamma-color-mode" onchange="setGammaColorMode(this.value)">
+                <option value="classic">Classic</option><option value="bookmap">Bookmap</option><option value="bookmapLight">Bookmap Light</option>
+                <option value="heatmap">Heatmap</option><option value="contrast">Contrast</option><option value="iceberg">Iceberg</option>
+                <option value="liquidity">Liquidity</option><option value="mono">Monochrome Pro</option>
+              </select></label>
+          <label class="chart-type-field"><span>Chart</span><select id="gamma-chart-type" onchange="setGammaChartType(this.value)">
+            <option value="surface">3D Surface</option>
+            <option value="bars">Flat GEX by Strike</option>
+          </select></label>
+              <button class="control-btn primary" id="gamma-reload-btn" onclick="loadGamma()">Reload</button>
+              
+            </div>
+          </div>
+
+          <div class="gamma-status-strip" id="gamma-status-strip">Status: Loading API · Expiration: 0DTE · Snapshot: — · NQ ref: — · Auto: on</div>
+
+          <div class="gamma-map-wrap">
+            <div class="gamma-legend-manual">
+              <div><span class="gamma-swatch yellow"></span>Current NQ path</div>
+              <div><span class="gamma-swatch green"></span>Call Wall</div>
+              <div><span class="gamma-swatch red"></span>Put Wall</div>
+              <div><span class="gamma-swatch purple"></span>Gamma Flip</div>
+            </div>
+            <div class="gamma-map height-standard" id="gamma-chart"></div>
+            <span class="status-badge gamma-hidden-status" id="gamma-status">Loading...</span>
+          </div>
+        </section>
+
+        <section class="gamma-level-grid">
+          <div class="level-card level-call"><div class="eyebrow">Call Wall</div><strong id="g-call">—</strong><span>Upside resistance / magnet zone</span><small>Use it: look for absorption, rejection, or failed breakout if price reaches it.</small></div>
+          <div class="level-card level-put"><div class="eyebrow">Put Wall</div><strong id="g-put">—</strong><span>Downside support / risk zone</span><small>Use it: look for defense, failed breakdown, or acceleration if it fails.</small></div>
+          <div class="level-card level-flip"><div class="eyebrow">Gamma Flip</div><strong id="g-flip">—</strong><span>Dealer behavior pivot</span><small>Use it: do not blindly fade near the flip; wait for confirmation.</small></div>
+          <div class="level-card level-net"><div class="eyebrow">Net GEX</div><strong id="g-net-gex">—</strong><span>Overall dealer positioning bias</span><small>Use it: positive favors pinning; negative favors expansion.</small></div>
+          <div class="level-card level-range"><div class="eyebrow">Expected Range</div><strong id="g-range">—</strong><span>Pinning / trap zone</span><small>Use it: avoid chasing the middle without order-flow confirmation.</small></div>
+          <div class="level-card level-spot"><div class="eyebrow">Current NQ</div><strong id="g-spot">—</strong><span>Translated NQ reference price</span><small>Use it: know whether price is near a wall, flip, or middle of range.</small></div>
+          <div class="level-card level-closest"><div class="eyebrow">Closest Major Level</div><strong id="g-closest">—</strong><span>Nearest reaction zone</span><small>Use it: focus order-flow reads around the closest level first.</small></div>
+          <div class="level-card level-regime"><div class="eyebrow">Current Regime</div><strong id="g-regime">—</strong><span>Pinning / Mean Reversion / Acceleration</span><small>Use it: decide whether to fade, wait, or expect expansion.</small></div>
+        </section>
+
+        <section class="orderflow-guide">
+          <div>
+            <div class="eyebrow">How to Trade This With Order Flow</div>
+            <h2>Gamma gives the level. Order flow gives the trigger.</h2>
+            <p>Use the gamma map to know where reactions are likely. Then use your actual execution tools — Bookmap, CVD, footprint, absorption, and failed breaks — to decide whether the level is holding or failing.</p>
+          </div>
+          <div class="guide-grid">
+            <article><b>Near Call Wall</b><p>Look for absorption, failed breakout, CVD divergence, or trapped buyers. A clean acceptance above can shift into expansion.</p></article>
+            <article><b>Near Put Wall</b><p>Look for absorption, failed breakdown, CVD divergence, or trapped sellers. If the wall fails, downside can expand.</p></article>
+            <article><b>Near Gamma Flip</b><p>Expect behavior to change. Do not blindly fade. Wait for CVD and Bookmap confirmation.</p></article>
+            <article><b>Positive Gamma</b><p>Expect more mean reversion, pinning, and chop. Be careful chasing breakouts in the middle.</p></article>
+            <article><b>Negative Gamma</b><p>Expect more expansion, momentum, and larger moves. Breaks can travel farther than expected.</p></article>
+          </div>
+        </section>
+      </div>
+    </section>
+
+
+    <section class="page" id="page-stats">
+      <div class="grid grid-4">
+        <div class="card stats-big"><div class="card-label">Win Rate</div><div class="stats-val" id="st-wr">—</div><div class="muted" id="st-wr-sub">—</div></div>
+        <div class="card stats-big"><div class="card-label">Net P&L</div><div class="stats-val" id="st-pnl">—</div><div class="muted">All time</div></div>
+        <div class="card stats-big"><div class="card-label">Avg R / Trade</div><div class="stats-val" id="st-avgr">—</div><div class="muted" id="st-avgr-sub">—</div></div>
+        <div class="card stats-big"><div class="card-label">Streak</div><div class="stats-val" id="st-streak">—</div><div class="muted" id="st-streak-sub">Current</div></div>
+      </div>
+      <div class="grid grid-2">
+        <div class="card"><div class="card-header"><div class="card-label">By Session</div></div><div class="card-body" id="stats-sess"></div></div>
+        <div class="card"><div class="card-header"><div class="card-label">Confluence Impact</div></div><div class="card-body" id="conf-corr-table"></div></div>
+      </div>
+      <div class="grid grid-2">
+        <div class="card"><div class="card-header"><div class="card-label">By Emotion</div></div><div class="card-body" id="stats-emotion"></div></div>
+        <div class="card"><div class="card-header"><div class="card-label">Best & Worst Days</div></div><div class="card-body" id="stats-days"></div></div>
+      </div>
+      <div class="card"><div class="card-header"><div><div class="card-label">Trade Calendar Heatmap</div><h2 id="cal-title">Calendar</h2></div></div><div class="calendar-grid" id="calendar-grid"></div></div>
+    </section>
+
+    <section class="page" id="page-more">
+      <div class="card"><div class="card-header"><div><div class="card-label">Database</div><h2>Supabase</h2></div><button class="btn btn-primary" onclick="testConn()">Test / Reload Supabase</button></div><div class="card-body"><div id="conn-detail" class="muted">Checking...</div></div></div>
+      <div class="card"><div class="card-header"><div class="card-label">Profile</div></div>
+        <div class="settings-row"><div><div class="settings-title">Trader Name</div></div><input class="settings-input" id="s-name" oninput="saveSetting('traderName',this.value)"></div>
+        <div class="settings-row"><div><div class="settings-title">Account Size</div></div><input class="settings-input" id="s-account" type="number" oninput="saveSetting('accountSize',this.value)"></div>
+      </div>
+      <div class="card"><div class="card-header"><div class="card-label">Session Times</div></div>
+        <div class="settings-row"><div><div class="settings-title">Prime Start</div></div><input class="settings-input" id="s-prime" type="time" oninput="saveSetting('primeSt',this.value)"></div>
+        <div class="settings-row"><div><div class="settings-title">Good Start</div></div><input class="settings-input" id="s-good" type="time" oninput="saveSetting('goodSt',this.value)"></div>
+        <div class="settings-row"><div><div class="settings-title">Session End</div></div><input class="settings-input" id="s-end" type="time" oninput="saveSetting('endSt',this.value)"></div>
+      </div>
+      <div class="card"><div class="card-header"><div class="card-label">Win Sounds</div><button class="toggle" id="toggle-sound" onclick="toggleSound()"></button></div><div class="card-body"><div class="audio-drop" onclick="document.getElementById('f-audio').click()"><input hidden type="file" id="f-audio" multiple accept="audio/*" onchange="handleAudio(this)"><b>Upload win sound clips</b><br><span class="muted">MP3, WAV, M4A</span></div><div id="audio-track-list"></div></div></div>
+      <div class="card"><div class="settings-row"><div><div class="settings-title" style="color:var(--red)">Delete All Local Trades</div><div class="settings-sub">Supabase rows are not deleted by this button.</div></div><button class="btn btn-danger" onclick="clearLocal()">Delete</button></div></div>
+    </section>
+  </main>
+
+  <nav class="tab-bar">
+    <button class="tab-item active" id="tab-today" onclick="navTo('today')">Today</button><button class="tab-item" id="tab-history" onclick="navTo('history')">History</button><button class="tab-item" id="tab-log" onclick="navTo('log')">＋ Log</button><button class="tab-item" id="tab-gamma" onclick="navTo('gamma')">Gamma</button><button class="tab-item" id="tab-stats" onclick="navTo('stats')">Stats</button><button class="tab-item" id="tab-more" onclick="navTo('more')">Settings</button>
+  </nav>
+</div>
+
+<div class="modal-overlay" id="modal" onclick="if(event.target===this)closeModal()"><div class="modal-sheet"><div class="modal-header"><h2 id="modal-title"></h2><button class="modal-close" onclick="closeModal()">✕</button></div><div class="modal-body" id="modal-body"></div><div class="form-actions"><button class="trade-action-btn delete" id="modal-del">Delete Trade</button><button class="trade-action-btn edit" id="modal-edit">Edit Trade</button><button class="btn btn-ghost" onclick="closeModal()">Close</button></div></div></div>
+<div class="lightbox" id="lightbox" onclick="closeLightbox()"><img id="lightbox-img" onclick="event.stopPropagation()"></div>
+<div class="win-flash" id="win-flash"></div><div class="toast" id="toast"></div>
+
+<script>
+const SUPA_URL='https://najvjcciafmorqxsuhfi.supabase.co';
+const SUPA_KEY='sb_publishable_1OtFJtxKDVhheE8QBza74w_PhezqzWH';
+const FREEFLOW_KEY='ff_Ys_KBZCY2cEwx7fV6KQcriRjRhyvfvLMNitL0_dh8WU';
+let trades=[],settings={},ssFiles=[],ssFilesOf=[],ssFilesBm=[],audioTracks=[],historyFilter='all',currentPage='today',camera={eye:{x:1.52,y:1.18,z:.82},center:{x:0,y:0,z:0}};
+function todayStr(){return new Date().toISOString().split('T')[0]} function money(n){n=Number(n||0);return (n>=0?'+$':'-$')+Math.abs(n).toLocaleString()} function toast(m,t){let e=document.getElementById('toast');e.textContent=m;e.className='toast '+(t||'')+' show';clearTimeout(window._toast);window._toast=setTimeout(()=>e.classList.remove('show'),2800)}
+async function sbSelect(table,order='created_at.desc'){let r=await fetch(SUPA_URL+'/rest/v1/'+table+'?select=*&order='+order,{headers:{apikey:SUPA_KEY,Authorization:'Bearer '+SUPA_KEY}});if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}
+async function sbInsert(table,row){let r=await fetch(SUPA_URL+'/rest/v1/'+table,{method:'POST',headers:{apikey:SUPA_KEY,Authorization:'Bearer '+SUPA_KEY,'Content-Type':'application/json',Prefer:'return=representation'},body:JSON.stringify(row)});if(!r.ok)throw new Error(await r.text());return r.json()}
+async function sbUpdate(table,id,row){let r=await fetch(SUPA_URL+'/rest/v1/'+table+'?id=eq.'+id,{method:'PATCH',headers:{apikey:SUPA_KEY,Authorization:'Bearer '+SUPA_KEY,'Content-Type':'application/json',Prefer:'return=representation'},body:JSON.stringify(row)});if(!r.ok)throw new Error(await r.text());return r.json()}
+async function sbDelete(table,id){let r=await fetch(SUPA_URL+'/rest/v1/'+table+'?id=eq.'+id,{method:'DELETE',headers:{apikey:SUPA_KEY,Authorization:'Bearer '+SUPA_KEY}});if(!r.ok)throw new Error('HTTP '+r.status)}
+function normalizeScreenshots(t){let s=t.screenshot_urls||[];if(typeof s==='string'&&s[0]==='{')s=s.slice(1,-1).split(',').map(u=>u.replace(/^"|"$/g,''));else if(typeof s==='string'){try{s=JSON.parse(s)}catch{s=[]}}t.screenshot_urls=(Array.isArray(s)?s:[]).filter(Boolean).map(u=>String(u).startsWith('http')?String(u).replace('/storage/v1/object/screenshots/','/storage/v1/object/public/screenshots/'):SUPA_URL+'/storage/v1/object/public/screenshots/'+String(u).replace(/^\\/,'')).filter(Boolean);return t}
+async function loadTrades(){setConn('loading','Fetching trades...');try{trades=(await sbSelect('trades')).map(normalizeScreenshots);setConn('ok','Connected · '+trades.length+' trades');try{renderAll()}catch(renderErr){console.error(renderErr);toast('Render error: '+renderErr.message,'red')}}catch(e){setConn('err',e.message);try{trades=JSON.parse(localStorage.getItem('nq_local_trades')||'[]')}catch{trades=[]}try{renderAll()}catch(renderErr){console.error(renderErr);toast('Render error: '+renderErr.message,'red')}}}
+function setConn(state,msg){let b=document.getElementById('db-badge');b.className='status-badge '+(state==='ok'?'ok':state==='err'?'err':'warn');b.textContent=(state==='err'?'Supabase error':msg);let d=document.getElementById('conn-detail');if(d)d.textContent=msg}
+function navTo(p){document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.getElementById('page-'+p).classList.add('active');document.querySelectorAll('.tab-item').forEach(x=>x.classList.remove('active'));document.getElementById('tab-'+p).classList.add('active');currentPage=p;document.getElementById('page-title').textContent={today:"Today's Session",history:"Trade History",log:"Log a Trade",gamma:"Gamma Lens",stats:"Statistics",more:"Settings"}[p];if(p==='stats')renderStats();if(p==='today')renderToday();if(p==='history')renderHistory();if(p==='gamma')setTimeout(renderGamma,80);if(p==='more'){applySettings();loadAudioSettings()}}
+function sessTimes(){let toMin=t=>{let p=(t||'00:00').split(':');return +p[0]*60+(+p[1]||0)};return{prime:toMin(settings.primeSt||'06:45'),good:toMin(settings.goodSt||'07:45'),end:toMin(settings.endSt||'10:30')}}
+function getSessionLabel(time){if(!time)return'';let [h,m]=time.split(':').map(Number),mins=h*60+(m||0),s=sessTimes();if(mins>=s.prime&&mins<s.good)return'Prime';if(mins>=s.good&&mins<s.end)return'Good';if(mins>=s.end)return'Slow';return''}
+function updateStatusBar(){let n=new Date(),mins=n.getHours()*60+n.getMinutes(),s=sessTimes(),b=document.getElementById('session-badge');let txt='Pre-Session',cls='warn';if(mins>=s.prime&&mins<s.good){txt='Prime Session';cls='ok'}else if(mins>=s.good&&mins<s.end){txt='Good Session';cls='warn'}else if(mins>=s.end){txt='Session Closed';cls=''}b.className='status-badge '+cls;b.textContent=txt;document.getElementById('top-date').textContent=n.toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'})}
+
+function renderAll(){
+  renderToday();
+  renderHistory();
+  if(currentPage==='stats') renderStats();
+  renderEquity();
+  updateStatusBar();
+}
+
+function renderToday(){updateStatusBar();let tt=trades.filter(t=>t.date===todayStr()),wins=tt.filter(t=>t.outcome==='Win').length,losses=tt.filter(t=>t.outcome==='Loss').length,pnl=tt.reduce((a,t)=>a+(t.pnl_usd||0),0),r=tt.reduce((a,t)=>a+(t.r_result||0),0),wr=wins+losses?Math.round(wins/(wins+losses)*100):null;let p=document.getElementById('today-pnl');p.textContent=tt.length?money(pnl):'—';p.className='pnl-amount '+(tt.length?(pnl>=0?'pos':'neg'):'muted');document.getElementById('today-sub').textContent=tt.length?tt.length+' trades · '+(r>=0?'+':'')+r.toFixed(2)+'R':'No trades yet';document.getElementById('today-wr').textContent=wr!==null?wr+'%':'—';document.getElementById('today-r').textContent=tt.length?(r>=0?'+':'')+r.toFixed(2)+'R':'—';document.getElementById('today-count').textContent=tt.length;document.getElementById('today-list').innerHTML=tt.length?tt.map(buildTradeRow).join(''):'<div class="empty">No trades today</div>';renderEquity()}
+function buildTradeRow(t){
+  let c=t.confluences||{},core=['Bookmap Stack','CVD Divergence','HTF POI','Absorption'];
+  let pills=core.map(k=>`<span class="tr-pill ${c[k]?'core':'off'}">${k.replace(' Stack','').replace(' Divergence','')}</span>`).join('');
+  let time=(t.notes||'').match(/Time:\s*([0-9:]+)/)?.[1]||'';
+  let out=(t.outcome||'').toLowerCase(),bar=out==='win'?'win':out==='loss'?'loss':'be';
+  let pnl=t.pnl_usd!=null?money(t.pnl_usd):'';
+  let r=t.r_result!=null?((t.r_result>0?'+':'')+t.r_result+'R'):(t.outcome||'—');
+  return `<div class="trade-row" onclick="openModal(${t.id})">
+    <div class="tr-bar ${bar}"></div>
+    <div class="tr-main">
+      <div class="tr-top">
+        <span class="tr-dir ${(t.direction||'').toLowerCase()}">${t.direction||'—'}</span>
+        <span class="tr-meta">NQ</span>
+        ${time?`<span class="tr-meta">${time}</span>`:''}
+        ${t.session?`<span class="tr-meta">${t.session}</span>`:''}
+      </div>
+      <div class="tr-pills">${pills}</div>
+      <div class="trade-actions" onclick="event.stopPropagation()">
+        <button class="trade-action-btn edit" onclick="editTrade(${t.id})">Edit Trade</button>
+        <button class="trade-action-btn delete" onclick="deleteTrade(${t.id})">Delete Trade</button>
+      </div>
+    </div>
+    <div class="tr-right">
+      <div class="tr-r ${Number(t.r_result)>=0?'pos':'neg'}">${r}</div>
+      <div class="tr-pnl">${pnl}</div>
+    </div>
+  </div>`
+}
+function setFilter(f,el){historyFilter=f;document.querySelectorAll('.filter-chip').forEach(x=>x.classList.remove('active'));el.classList.add('active');renderHistory()}
+function fDate(d){
+  if(!d || d==='Unknown')return 'Unknown';
+  const dt=new Date(d+'T12:00:00');
+  return dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+}
+
+function dayLabel(d){
+  if(!d)return 'Unknown Day';
+  const today=todayStr();
+  const dt=new Date(d+'T12:00:00');
+  const y=new Date(); y.setDate(y.getDate()-1);
+  const isoY=y.toISOString().split('T')[0];
+  if(d===today)return 'Today';
+  if(d===isoY)return 'Yesterday';
+  return dt.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
+}
+
+function renderHistory(){
+  let f=trades.filter(t=>historyFilter==='win'?t.outcome==='Win':historyFilter==='loss'?t.outcome==='Loss':historyFilter==='prime'?t.session==='Prime':historyFilter==='good'?t.session==='Good':historyFilter==='violation'?Object.values(t.confluences||{}).some(v=>v===false):true);
+  const list=document.getElementById('history-list');
+  if(!list)return;
+  if(!f.length){list.innerHTML='<div class="empty">No trades found</div>';return;}
+
+  const groups={};
+  f.forEach(t=>{
+    const d=t.date||'Unknown';
+    if(!groups[d])groups[d]=[];
+    groups[d].push(t);
+  });
+
+  const dates=Object.keys(groups).sort((a,b)=>String(b).localeCompare(String(a)));
+  list.innerHTML=dates.map(d=>{
+    const dayTrades=groups[d].sort((a,b)=>String((b.notes||'').match(/Time:\s*([0-9:]+)/)?.[1]||'').localeCompare(String((a.notes||'').match(/Time:\s*([0-9:]+)/)?.[1]||'')));
+    const pnl=dayTrades.reduce((s,t)=>s+(Number(t.pnl_usd)||0),0);
+    const wins=dayTrades.filter(t=>t.outcome==='Win').length;
+    const losses=dayTrades.filter(t=>t.outcome==='Loss').length;
+    const r=dayTrades.reduce((s,t)=>s+(Number(t.r_result)||0),0);
+    return `<section class="history-day-group">
+      <div class="history-day-header">
+        <div>
+          <div class="history-day-title">${dayLabel(d)}</div>
+          <div class="history-day-sub">${fDate(d)} · ${dayTrades.length} trade${dayTrades.length!==1?'s':''} · ${wins}W / ${losses}L · ${(r>=0?'+':'')+r.toFixed(2)}R</div>
+        </div>
+        <div class="history-day-pnl ${pnl>=0?'pos':'neg'}">${money(pnl)}</div>
+      </div>
+      <div>${dayTrades.map(buildTradeRow).join('')}</div>
+    </section>`;
+  }).join('');
+}
+function pickToggle(el){let g=el.dataset.g,v=el.dataset.v;document.querySelectorAll(`.btt[data-g="${g}"]`).forEach(b=>b.className='btt');let map={'direction-Long':'sel-long','direction-Short':'sel-short','outcome-Win':'sel-win','outcome-Loss':'sel-loss','outcome-Break Even':'sel-be','played_out-Yes':'sel-yes','played_out-No':'sel-no'};el.className='btt '+(map[g+'-'+v]||'sel-default')}
+function getToggle(g){let found='';document.querySelectorAll(`.btt[data-g="${g}"]`).forEach(b=>{if(b.className!=='btt')found=b.dataset.v});return found}
+function toggleConf(btn){let on=btn.classList.contains('sel-core');btn.className=on?'btt':'btt sel-core';checkCoreWarn()}
+function checkCoreWarn(){let core=[...document.querySelectorAll('#conf-btg [data-core="1"]')],all=core.every(b=>b.classList.contains('sel-core'));document.getElementById('core-warn').style.display=all?'none':'block'}
+function getSelectedConfs(){let r={};document.querySelectorAll('#conf-btg button').forEach(b=>r[b.dataset.v]=b.classList.contains('sel-core'));return r}
+function getSSBucket(type){
+  return {
+    arr: type==='of' ? ssFilesOf : type==='bm' ? ssFilesBm : ssFiles,
+    preview: type==='of' ? 'ss-previews-of' : type==='bm' ? 'ss-previews-bm' : 'ss-previews'
+  };
+}
+
+function addScreenshotFiles(fileList,type){
+  const bucket=getSSBucket(type);
+  const files=[...fileList].filter(file=>file && file.type && file.type.startsWith('image/'));
+  if(!files.length){toast('Drop PNG/JPG screenshots only','red');return;}
+  files.forEach(file=>{
+    const idx=bucket.arr.length;
+    bucket.arr.push(file);
+    const rd=new FileReader();
+    rd.onload=e=>addThumb(e.target.result,idx,bucket.arr,bucket.preview);
+    rd.readAsDataURL(file);
+  });
+  toast(files.length+' screenshot'+(files.length>1?'s':'')+' added','green');
+}
+
+function handleSS(input,type){
+  addScreenshotFiles(input.files,type);
+  input.value='';
+}
+
+function addThumb(src,idx,arr,pid){
+  const c=document.getElementById(pid);
+  if(!c)return;
+  const w=document.createElement('div');
+  w.className='ss-thumb';
+  w.innerHTML=`<img src="${src}" alt="Screenshot preview"><div class="ss-remove">×</div>`;
+  w.querySelector('.ss-remove').onclick=()=>{arr[idx]=null;w.remove()};
+  c.appendChild(w);
+}
+
+function setupScreenshotDropzones(){
+  const zones=[
+    {drop:'ss-drop-of',input:'f-ss-of',type:'of'},
+    {drop:'ss-drop-bm',input:'f-ss-bm',type:'bm'},
+    {drop:'ss-drop',input:'f-ss',type:'other'}
+  ];
+
+  zones.forEach(z=>{
+    const drop=document.getElementById(z.drop);
+    const input=document.getElementById(z.input);
+    if(!drop)return;
+    drop.dataset.ssType=z.type;
+    drop.dataset.ssInput=z.input;
+
+    if(!drop.dataset.clickReady){
+      drop.dataset.clickReady='1';
+      drop.addEventListener('click',e=>{
+        if(e.target && e.target.tagName==='INPUT')return;
+        const fileInput=document.getElementById(drop.dataset.ssInput);
+        if(fileInput)fileInput.click();
+      });
+    }
+  });
+
+  if(window.__globalScreenshotDropReady)return;
+  window.__globalScreenshotDropReady=true;
+
+  document.addEventListener('dragover',e=>{
+    const drop=e.target.closest && e.target.closest('.ss-drop');
+    if(!drop)return;
+    e.preventDefault();
+    e.stopPropagation();
+    drop.classList.add('dragover');
+  },true);
+
+  document.addEventListener('dragenter',e=>{
+    const drop=e.target.closest && e.target.closest('.ss-drop');
+    if(!drop)return;
+    e.preventDefault();
+    e.stopPropagation();
+    drop.classList.add('dragover');
+  },true);
+
+  document.addEventListener('dragleave',e=>{
+    const drop=e.target.closest && e.target.closest('.ss-drop');
+    if(!drop)return;
+    e.preventDefault();
+    e.stopPropagation();
+    const rect=drop.getBoundingClientRect();
+    const outside=e.clientX<rect.left||e.clientX>rect.right||e.clientY<rect.top||e.clientY>rect.bottom;
+    if(outside)drop.classList.remove('dragover');
+  },true);
+
+  document.addEventListener('drop',e=>{
+    const drop=e.target.closest && e.target.closest('.ss-drop');
+    if(!drop)return;
+    e.preventDefault();
+    e.stopPropagation();
+    drop.classList.remove('dragover');
+    addScreenshotFiles(e.dataTransfer.files,drop.dataset.ssType||'other');
+  },true);
+}
+
+async function uploadScreenshots(){let groups=[{files:ssFilesOf,tag:'of'},{files:ssFilesBm,tag:'bm'},{files:ssFiles,tag:'other'}],urls=[];for(let g of groups){for(let file of g.files.filter(Boolean)){let ext=file.name.split('.').pop()||'jpg',path='trade-'+g.tag+'-'+Date.now()+'-'+Math.random().toString(36).slice(2,7)+'.'+ext;try{let r=await fetch(SUPA_URL+'/storage/v1/object/screenshots/'+path,{method:'POST',headers:{apikey:SUPA_KEY,Authorization:'Bearer '+SUPA_KEY,'Content-Type':file.type||'image/jpeg','x-upsert':'true'},body:file});if(r.ok)urls.push(SUPA_URL+'/storage/v1/object/public/screenshots/'+path)}catch(e){}}}return urls}
+async function saveTrade(){let btn=document.getElementById('save-btn'),editId=btn.dataset.editId||'',date=document.getElementById('f-date').value,direction=getToggle('direction'),outcome=getToggle('outcome'),why=document.getElementById('f-why').value.trim();if(!date||!direction||!outcome){toast('Date, direction, and outcome required','red');return}if(!why){toast('Please explain why you took this trade','red');return}btn.disabled=true;btn.textContent='Saving...';try{let time=document.getElementById('f-time').value,shots=await uploadScreenshots(),trade={date,direction,outcome,notes:(document.getElementById('f-notes').value||'')+(time?'\nTime: '+time:''),session:getSessionLabel(time),confluences:getSelectedConfs(),instrument:'NQ',r_result:parseFloat(document.getElementById('f-r').value)||null,pnl_usd:parseFloat(document.getElementById('f-pnl').value)||null,emotion:getToggle('emotion'),why_taken:why,setup_num:getToggle('setup'),played_out:getToggle('played_out'),poi_type:getToggle('poi_type'),screenshot_urls:shots};let saved=editId?await sbUpdate('trades',editId,trade):await sbInsert('trades',trade);if(outcome==='Win')playWinSound();clearForm();await loadTrades();navTo(editId?'history':'today');toast('Trade saved','green')}catch(e){toast('Save failed: '+e.message,'red')}btn.disabled=false;btn.textContent='Save Trade'}
+function clearForm(){['f-date','f-time','f-r','f-pnl','f-why','f-notes'].forEach(id=>{let e=document.getElementById(id);if(e)e.value=id==='f-date'?todayStr():id==='f-time'?new Date().toTimeString().slice(0,5):''});document.querySelectorAll('.btt').forEach(b=>b.className='btt');document.querySelectorAll('[data-core="1"]').forEach(b=>b.className='btt sel-core');['ss-previews','ss-previews-of','ss-previews-bm'].forEach(id=>document.getElementById(id).innerHTML='');ssFiles=[];ssFilesOf=[];ssFilesBm=[];document.getElementById('cancel-edit-btn').style.display='none';document.getElementById('save-btn').dataset.editId='';updateFormSession()}
+function cancelEdit(){clearForm();navTo('history')} function updateFormSession(){let e=document.getElementById('form-session');if(e)e.textContent=getSessionLabel(document.getElementById('f-time').value)||'—'} document.addEventListener('input',e=>{if(e.target.id==='f-time')updateFormSession()})
+function openModal(id){let t=trades.find(x=>x.id==id);if(!t)return;document.getElementById('modal-title').textContent=(t.direction||'Trade')+' · '+(t.outcome||'');let shots=t.screenshot_urls||[];document.getElementById('modal-body').innerHTML=`<div class="grid grid-3"><div class="card"><div class="card-label">P&L</div><div class="level-val ${Number(t.pnl_usd)>=0?'pos':'neg'}">${t.pnl_usd!=null?money(t.pnl_usd):'—'}</div></div><div class="card"><div class="card-label">R</div><div class="level-val">${t.r_result??'—'}</div></div><div class="card"><div class="card-label">Session</div><div class="level-val">${t.session||'—'}</div></div></div><div class="modal-section"><div class="card-label">Why</div><p style="line-height:1.7">${t.why_taken||'—'}</p></div><div class="modal-section"><div class="card-label">Notes</div><p style="white-space:pre-wrap;line-height:1.7">${t.notes||'—'}</p></div><div class="modal-section"><div class="card-label">Screenshots</div><div class="grid grid-2">${shots.length?shots.map(u=>`<img src="${u}" style="width:100%;border-radius:14px;cursor:zoom-in" onclick="openLightbox('${u}')">`).join(''):'<span class="muted">No screenshots</span>'}</div></div>`;document.getElementById('modal-del').onclick=()=>deleteTrade(id);document.getElementById('modal-edit').onclick=()=>editTrade(id);document.getElementById('modal').classList.add('open')}
+function closeModal(){document.getElementById('modal').classList.remove('open')} function openLightbox(src){document.getElementById('lightbox-img').src=src;document.getElementById('lightbox').classList.add('open')} function closeLightbox(){document.getElementById('lightbox').classList.remove('open')}
+async function deleteTrade(id){if(!confirm('Delete this trade?'))return;try{await sbDelete('trades',id);closeModal();await loadTrades();toast('Deleted','green')}catch(e){toast(e.message,'red')}}
+function editTrade(id){let t=trades.find(x=>x.id==id);if(!t)return;closeModal();navTo('log');setTimeout(()=>{document.getElementById('f-date').value=t.date||todayStr();document.getElementById('f-time').value=(t.notes||'').match(/Time:\s*([0-9:]+)/)?.[1]||'';document.getElementById('f-r').value=t.r_result||'';document.getElementById('f-pnl').value=t.pnl_usd||'';document.getElementById('f-why').value=t.why_taken||'';document.getElementById('f-notes').value=(t.notes||'').replace(/\nTime:.*/,'');['direction','outcome','emotion','setup','played_out','poi_type'].forEach(g=>{let val={direction:t.direction,outcome:t.outcome,emotion:t.emotion,setup:t.setup_num,played_out:t.played_out,poi_type:t.poi_type}[g];let b=document.querySelector(`.btt[data-g="${g}"][data-v="${val}"]`);if(b)pickToggle(b)});document.getElementById('save-btn').dataset.editId=id;document.getElementById('save-btn').textContent='Update Trade';document.getElementById('cancel-edit-btn').style.display='inline-block';updateFormSession()},80)}
+function renderStats(){let wins=trades.filter(t=>t.outcome==='Win').length,losses=trades.filter(t=>t.outcome==='Loss').length,wr=wins+losses?Math.round(wins/(wins+losses)*100):null,pnl=trades.reduce((a,t)=>a+(t.pnl_usd||0),0),rs=trades.filter(t=>t.r_result!=null),avg=rs.length?rs.reduce((a,t)=>a+t.r_result,0)/rs.length:null;document.getElementById('st-wr').textContent=wr!==null?wr+'%':'—';document.getElementById('st-wr-sub').textContent=wins+'W · '+losses+'L';document.getElementById('st-pnl').textContent=trades.length?money(pnl):'—';document.getElementById('st-avgr').textContent=avg!==null?(avg>=0?'+':'')+avg.toFixed(2)+'R':'—';document.getElementById('st-avgr-sub').textContent=rs.length+' trades w/ R';document.getElementById('st-streak').textContent=getStreak();breakdown('stats-sess',['Prime','Good','Slow'].map(s=>({label:s,arr:trades.filter(t=>t.session===s)})));breakdown('stats-emotion',['Calm','Confident','Impulsive','FOMO','Revenge'].map(s=>({label:s,arr:trades.filter(t=>t.emotion===s)})));renderConf();renderDays();renderCalendar()}
+function getStreak(){let list=trades.filter(t=>t.outcome==='Win'||t.outcome==='Loss');if(!list.length)return'—';let first=list[0].outcome,c=0;for(let t of list){if(t.outcome===first)c++;else break}return c+(first==='Win'?' W':' L')}
+function breakdown(id,items){document.getElementById(id).innerHTML=items.filter(i=>i.arr.length).map(i=>{let w=i.arr.filter(t=>t.outcome==='Win').length,l=i.arr.filter(t=>t.outcome==='Loss').length,p=w+l?Math.round(w/(w+l)*100):0,c=p>=60?'var(--green)':p>=45?'var(--amber)':'var(--red)';return`<div class="bkd-row"><div class="bkd-label">${i.label} <span class="muted">(${i.arr.length})</span></div><div class="bkd-bar-wrap"><div class="bkd-bar" style="width:${p}%;background:${c}"></div></div><div class="bkd-val" style="color:${c}">${p||'—'}%</div></div>`}).join('')||'<div class="muted">No data</div>'}
+function renderConf(){let map={};trades.forEach(t=>Object.entries(t.confluences||{}).forEach(([k,v])=>{if(v){map[k]=map[k]||{w:0,l:0,n:0};map[k].n++;if(t.outcome==='Win')map[k].w++;if(t.outcome==='Loss')map[k].l++}}));document.getElementById('conf-corr-table').innerHTML=Object.entries(map).map(([k,s])=>{let p=s.w+s.l?Math.round(s.w/(s.w+s.l)*100):0;return`<div class="bkd-row"><div class="bkd-label">${k} <span class="muted">(${s.n})</span></div><div class="bkd-bar-wrap"><div class="bkd-bar" style="width:${p}%;background:var(--green)"></div></div><div class="bkd-val">${p}%</div></div>`}).join('')||'<div class="muted">No confluence data</div>'}
+function renderDays(){let m={};trades.forEach(t=>{m[t.date]=m[t.date]||{p:0,w:0,l:0};m[t.date].p+=t.pnl_usd||0;if(t.outcome==='Win')m[t.date].w++;if(t.outcome==='Loss')m[t.date].l++});let arr=Object.entries(m).map(([d,v])=>({d,...v})).sort((a,b)=>b.p-a.p).slice(0,6);document.getElementById('stats-days').innerHTML=arr.map(x=>`<div class="bkd-row"><div class="bkd-label">${x.d}</div><div class="${x.p>=0?'pos':'neg'}" style="font-weight:900">${money(x.p)}</div></div>`).join('')||'<div class="muted">No data</div>'}
+function renderCalendar(){let now=new Date(),y=now.getFullYear(),m=now.getMonth(),days=new Date(y,m+1,0).getDate(),map={};trades.forEach(t=>{let d=new Date(t.date+'T12:00');if(d.getMonth()===m&&d.getFullYear()===y)map[t.date]=(map[t.date]||0)+(t.pnl_usd||0)});document.getElementById('cal-title').textContent=now.toLocaleDateString([], {month:'long',year:'numeric'});document.getElementById('calendar-grid').innerHTML=Array.from({length:days},(_,i)=>{let date=`${y}-${String(m+1).padStart(2,'0')}-${String(i+1).padStart(2,'0')}`,p=map[date]||0;return`<div class="cal-day ${p>0?'win':p<0?'loss':''}"><b>${i+1}</b><small>${p?money(p):''}</small></div>`}).join('')}
+function renderEquity(){let el=document.getElementById('equity-svg'),rs=trades.filter(t=>t.r_result!=null).slice().reverse();if(rs.length<2){el.innerHTML='<div class="muted">Log at least 2 trades to see your curve</div>';return}let vals=[0],run=0;rs.forEach(t=>{run+=t.r_result;vals.push(run)});let max=Math.max(...vals),min=Math.min(...vals),range=max-min||1,W=900,H=230,pad=28;let sx=i=>pad+i/(vals.length-1)*(W-pad*2),sy=v=>pad+(H-pad*2)-(v-min)/range*(H-pad*2);let d='M'+sx(0)+','+sy(vals[0]);for(let i=1;i<vals.length;i++)d+=' L'+sx(i)+','+sy(vals[i]);el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" height="230"><path d="${d} L${sx(vals.length-1)},${H-pad} L${pad},${H-pad} Z" fill="${run>=0?'rgba(22,101,52,.10)':'rgba(153,27,27,.10)'}"/><path d="${d}" fill="none" stroke="${run>=0?'#166534':'#991b1b'}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;document.getElementById('equity-meta').textContent=(run>=0?'+':'')+run.toFixed(2)+'R'}
+async function loadGamma(){document.getElementById('gamma-status').textContent='Loading...';try{let r=await fetch(`/api/freeflow?type=walls&symbol=QQQ&exp=${todayStr()}`),j=await r.json();window.gammaData=j;document.getElementById('gamma-status').textContent='Live / API';updateGammaCards(j);renderGamma();document.getElementById('gamma-mini').textContent='Gamma loaded'}catch(e){document.getElementById('gamma-status').textContent='Mock / fallback';renderGamma()}}
+function fmtLevel(n){return n==null||n===''?'—':Math.round(Number(n)).toLocaleString()}
+function getTransferredLevels(j){
+  let g=j||{};
+  let call = g.call_wall?.strike ?? g.callWall ?? g.call_wall ?? null;
+  let put = g.put_wall?.strike ?? g.putWall ?? g.put_wall ?? null;
+  let flip = g.gamma_flip ?? g.gammaFlip ?? null;
+  let spot = g.spot ?? null;
+  // FreeFlow gives QQQ/SPY levels. Convert QQQ to NQ using current known ratio if levels are ETF-like.
+  // If the frontend/API already returns NQ-sized values, keep them.
+  const nqRef = Number(g.nq_ref || g.nqRef || 27906);
+  if(call && Number(call) < 1000){
+    const ratio = nqRef / Number(spot || 674.18);
+    call = Number(call) * ratio;
+    put = Number(put) * ratio;
+    flip = Number(flip) * ratio;
+    spot = nqRef;
+  }
+  return {call:Number(call||27939), put:Number(put||26491), flip:Number(flip||27526), spot:Number(spot||27906)};
+}
+function updateGammaCards(j){
+  let lv=getTransferredLevels(j);
+  document.getElementById('g-call').textContent=fmtLevel(lv.call);
+  document.getElementById('g-put').textContent=fmtLevel(lv.put);
+  document.getElementById('g-flip').textContent=fmtLevel(lv.flip);
+  let range=document.getElementById('g-range');
+  if(range) range.textContent=fmtLevel(lv.put)+'–'+fmtLevel(lv.call);
+  let strip=document.getElementById('gamma-status-strip');
+  if(strip) strip.textContent='Status: Live API · Updated '+new Date().toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})+' · Snapshot: loaded · NQ ref: '+fmtLevel(lv.spot)+' · Auto: off';
+}
+function makeGamma(){
+  let lv=getTransferredLevels(window.gammaData||{});
+  let mid=lv.spot || ((lv.call+lv.put)/2);
+  let minX=Math.min(lv.put, lv.flip, mid)*0.965;
+  let maxX=Math.max(lv.call, lv.flip, mid)*1.04;
+  let x=[],y=[],z=[];
+  for(let i=0;i<78;i++) x.push(minX + (maxX-minX)*i/77);
+  for(let j=0;j<42;j++) y.push(j*12/41);
+  for(let j=0;j<y.length;j++){
+    let row=[];
+    for(let i=0;i<x.length;i++){
+      const xi=x[i], yi=y[j];
+      let callPeak = 600*Math.exp(-Math.pow((xi-lv.call)/(maxX-minX)*7.0,2))*Math.exp(-yi/21);
+      let putValley = -500*Math.exp(-Math.pow((xi-lv.put)/(maxX-minX)*6.8,2))*Math.exp(-yi/18);
+      let flipDip = -150*Math.exp(-Math.pow((xi-lv.flip)/(maxX-minX)*12.0,2))*Math.exp(-Math.pow((yi-4.8)/5.5,2));
+      let wave = 34*Math.sin(i/9.5 + yi*.50) + 22*Math.cos(i/14 - yi*.42);
+      let slope = 100*((xi-mid)/(maxX-minX));
+      row.push(callPeak + putValley + flipDip + wave - slope);
+    }
+    z.push(row);
+  }
+  return {x,y,z,lv};
+}
+let gammaGridOn=true;
+let gammaViewMode='3d';
+function gammaColorscale(){
+  const mode=(document.getElementById('gamma-color-mode')?.value)||'classic';
+  if(mode==='heat') return [[0,'#be123c'],[.28,'#fb7185'],[.50,'#f8fafc'],[.72,'#2dd4bf'],[1,'#047857']];
+  if(mode==='contrast') return [[0,'#991b1b'],[.35,'#ef4444'],[.50,'#f4f4f5'],[.65,'#10b981'],[1,'#065f46']];
+  return [[0,'#e11d48'],[.34,'#fecdd3'],[.50,'#fafafa'],[.66,'#99f6e4'],[1,'#0f766e']];
+}
+function setGammaView(v){gammaViewMode=v;renderGamma()}
+function toggleGammaGrid(){gammaGridOn=!gammaGridOn;let b=document.getElementById('gamma-grid-toggle'); if(b)b.textContent=gammaGridOn?'Grid On':'Grid Off';renderGamma()}
+function updateGammaRead(){
+  let lv=getTransferredLevels(window.gammaData||{});
+  let spot=Number(lv.spot), call=Number(lv.call), put=Number(lv.put), flip=Number(lv.flip);
+  let between=spot<call && spot>put;
+  let aboveFlip=spot>flip;
+  let distFlip=Math.round(spot-flip);
+  let width=Math.round(call-put);
+  let regime=between?'Range / Pinning':'Expansion Risk';
+  let bias=aboveFlip?'Positive Gamma / Mean Reversion':'Negative Gamma / Volatile';
+  let title=between?`Pinned between ${fmtLevel(put)} and ${fmtLevel(call)}`:`Outside main walls — watch expansion`;
+  let text=between
+    ? `NQ is trading inside the expected gamma range. Treat ${fmtLevel(call)} as the upper reaction/resistance area, ${fmtLevel(put)} as support/risk, and ${fmtLevel(flip)} as the pivot zone. Best use: wait for order-flow confirmation at the level instead of chasing in the middle.`
+    : `NQ is trading outside or near the edge of the main gamma range. If price accepts outside the wall, moves can expand faster. Use the closest wall as the decision level and confirm with CVD, Bookmap, and absorption.`;
+  document.getElementById('gamma-read-title').textContent=title;
+  document.getElementById('gamma-read-text').textContent=text;
+  document.getElementById('gamma-regime').textContent=regime;
+  document.getElementById('gamma-bias').textContent=bias;
+  document.getElementById('gamma-dist-flip').textContent=(distFlip>=0?'+':'')+distFlip+' pts';
+  document.getElementById('gamma-range-width').textContent=width.toLocaleString()+' pts';
+}
+function renderGamma(){
+  if(!window.Plotly||!document.getElementById('gamma-chart'))return;
+  updateGammaRead();
+  let d=makeGamma(), lv=d.lv;
+  let pathX=[], pathY=[], pathZ=[];
+  for(let i=0;i<9;i++){
+    const t=i/8;
+    pathX.push(lv.spot + Math.sin(t*Math.PI*1.2)*70 + (t-.5)*120);
+    pathY.push(.35 + t*1.8);
+    pathZ.push(300 + Math.sin(t*Math.PI)*25);
+  }
+  const gridColor=gammaGridOn?'rgba(24,22,17,.22)':'rgba(24,22,17,0)';
+  const cameraNext=gammaViewMode==='top'
+    ? {eye:{x:0.02,y:0.02,z:2.35},center:{x:0,y:0,z:0}}
+    : camera;
+  let traces=[
+    {type:'surface',x:d.x,y:d.y,z:d.z,colorscale:gammaColorscale(),showscale:true,opacity:.92,
+      lighting:{ambient:.72,diffuse:.78,specular:.18,roughness:.60,fresnel:.18},
+      contours:{x:{show:gammaGridOn,color:'rgba(24,22,17,.20)',width:1},y:{show:gammaGridOn,color:'rgba(24,22,17,.20)',width:1},z:{show:gammaGridOn,color:'rgba(24,22,17,.18)',width:1}},
+      colorbar:{title:'Reaction Bias',len:.66,thickness:14,x:1.02,titlefont:{size:14,color:'#171510'},tickfont:{size:12,color:'#6f6860'}}},
+    {type:'scatter3d',mode:'lines+markers',name:'Current price path',x:pathX,y:pathY,z:pathZ,line:{color:'#facc15',width:8},marker:{color:'#facc15',size:5,line:{color:'#171510',width:1}}},
+    {type:'scatter3d',mode:'markers+text',name:'Call Wall',x:[lv.call],y:[2.0],z:[260],marker:{color:'#087a50',size:6,symbol:'circle'},text:['Call Wall'],textposition:'top center',textfont:{color:'#087a50',size:14,family:'DM Sans'}},
+    {type:'scatter3d',mode:'markers+text',name:'Put Wall',x:[lv.put],y:[10.5],z:[-135],marker:{color:'#a11d1d',size:6,symbol:'circle'},text:['Put Wall'],textposition:'bottom center',textfont:{color:'#a11d1d',size:14,family:'DM Sans'}},
+    {type:'scatter3d',mode:'markers+text',name:'Gamma Flip',x:[lv.flip],y:[6.2],z:[-55],marker:{color:'#6d28d9',size:6,symbol:'circle'},text:['Gamma Flip'],textposition:'top center',textfont:{color:'#6d28d9',size:14,family:'DM Sans'}},
+    {type:'scatter3d',mode:'lines',x:[lv.spot,lv.call],y:[1.4,2.0],z:[300,260],line:{color:'#087a50',width:3,dash:'dot'},showlegend:false},
+    {type:'scatter3d',mode:'lines',x:[lv.flip,lv.put],y:[6.2,10.5],z:[-55,-135],line:{color:'#a11d1d',width:3,dash:'dot'},showlegend:false}
+  ];
+  Plotly.react('gamma-chart',traces,{
+    paper_bgcolor:'#fbfaf7',
+    plot_bgcolor:'#fbfaf7',
+    margin:{l:0,r:8,t:0,b:0},
+    showlegend:false,
+    scene:{
+      bgcolor:'#fbfaf7',
+      camera:cameraNext,
+      aspectratio:{x:1.72,y:.92,z:.70},
+      xaxis:{title:'X: Price Levels',color:'#171510',gridcolor:gridColor,zerolinecolor:'rgba(24,22,17,.32)',showgrid:gammaGridOn,gridwidth:1.4,showbackground:true,backgroundcolor:'rgba(255,255,255,.45)',tickfont:{size:12,color:'#6f6860'}},
+      yaxis:{title:'Y: 0DTE / DTE Path',color:'#171510',gridcolor:gridColor,zerolinecolor:'rgba(24,22,17,.32)',showgrid:gammaGridOn,gridwidth:1.4,showbackground:true,backgroundcolor:'rgba(255,255,255,.45)',tickfont:{size:12,color:'#6f6860'}},
+      zaxis:{title:'Z: Gamma Exposure Strength',color:'#171510',gridcolor:gridColor,zerolinecolor:'rgba(24,22,17,.32)',showgrid:gammaGridOn,gridwidth:1.4,showbackground:true,backgroundcolor:'rgba(255,255,255,.45)',tickfont:{size:12,color:'#6f6860'}}
+    }
+  },{responsive:true,scrollZoom:true,displaylogo:false});
+}
+function resetCamera(){camera={eye:{x:1.52,y:1.18,z:.82},center:{x:0,y:0,z:0}};renderGamma()} function gammaZoom(f){camera.eye.x*=f;camera.eye.y*=f;camera.eye.z*=f;renderGamma()}
+function loadSettings(){try{settings=JSON.parse(localStorage.getItem('nq_settings')||'{}')}catch{settings={}};applySettings()}
+function saveSetting(k,v){settings[k]=v;localStorage.setItem('nq_settings',JSON.stringify(settings));applySettings()}
+function applySettings(){let vals={sname:'s-name'};document.getElementById('s-name').value=settings.traderName||'Jeremiah';document.getElementById('s-account').value=settings.accountSize||'50000';document.getElementById('s-prime').value=settings.primeSt||'06:45';document.getElementById('s-good').value=settings.goodSt||'07:45';document.getElementById('s-end').value=settings.endSt||'10:30';document.getElementById('toggle-sound').classList.toggle('on',localStorage.getItem('nq_sound')!=='off');updateStatusBar()}
+function testConn(){loadTrades()} function clearLocal(){if(confirm('Delete local fallback trades?')){localStorage.removeItem('nq_local_trades');toast('Local trades cleared','green')}}
+function loadAudioSettings(){try{audioTracks=JSON.parse(localStorage.getItem('nq_audio')||'[]')}catch{audioTracks=[]}renderAudioList();document.getElementById('toggle-sound').classList.toggle('on',localStorage.getItem('nq_sound')!=='off')}
+function toggleSound(){let on=localStorage.getItem('nq_sound')!=='off';localStorage.setItem('nq_sound',on?'off':'on');loadAudioSettings()}
+function addAudioFiles(fileList){
+  const files=[...fileList].filter(file=>file && file.type && file.type.startsWith('audio/'));
+  if(!files.length){toast('Drop MP3/WAV/M4A audio only','red');return;}
+  let left=files.length;
+  files.forEach(file=>{
+    const rd=new FileReader();
+    rd.onload=e=>{
+      audioTracks.push({name:file.name,dataUrl:e.target.result});
+      left--;
+      if(left===0){
+        try{localStorage.setItem('nq_audio',JSON.stringify(audioTracks))}catch(err){toast('Audio file is too large for browser storage','red')}
+        renderAudioList();
+        toast(files.length+' audio clip'+(files.length>1?'s':'')+' added','green');
+      }
+    };
+    rd.readAsDataURL(file);
+  });
+}
+
+function handleAudio(input){
+  addAudioFiles(input.files);
+  input.value='';
+}
+
+function setupAudioDropzone(){
+  const drop=document.querySelector('.audio-drop');
+  const input=document.getElementById('f-audio');
+  if(!drop || drop.dataset.audioDropReady==='1')return;
+  drop.dataset.audioDropReady='1';
+
+  drop.addEventListener('click',e=>{
+    if(e.target && e.target.tagName === 'INPUT') return;
+    input && input.click();
+  });
+
+  ['dragenter','dragover'].forEach(evt=>{
+    drop.addEventListener(evt,e=>{
+      e.preventDefault();
+      e.stopPropagation();
+      drop.classList.add('dragover');
+    });
+  });
+
+  ['dragleave','dragend','drop'].forEach(evt=>{
+    drop.addEventListener(evt,e=>{
+      e.preventDefault();
+      e.stopPropagation();
+      if(evt!=='drop')drop.classList.remove('dragover');
+    });
+  });
+
+  drop.addEventListener('drop',e=>{
+    drop.classList.remove('dragover');
+    addAudioFiles(e.dataTransfer.files);
+  });
+}
+
+function renderAudioList(){
+  let l=document.getElementById('audio-track-list');
+  if(!l)return;
+  l.innerHTML=audioTracks.map((t,i)=>`<div class="audio-track"><span class="audio-track-play" onclick="previewTrack(${i})">▶</span><span class="audio-track-name">${t.name}</span><span class="audio-track-remove" onclick="removeTrack(${i})">×</span></div>`).join('');
+}
+
+function previewTrack(i){
+  if(!audioTracks[i])return;
+  playAudioWithFade(audioTracks[i].dataUrl,{preview:true});
+}
+
+function removeTrack(i){
+  audioTracks.splice(i,1);
+  localStorage.setItem('nq_audio',JSON.stringify(audioTracks));
+  renderAudioList();
+}
+
+function loadAudioSettings(){
+  try{audioTracks=JSON.parse(localStorage.getItem('nq_audio')||'[]')}catch(e){audioTracks=[]}
+  renderAudioList();
+  let on=localStorage.getItem('nq_sound')!=='off';
+  document.getElementById('toggle-sound')?.classList.toggle('on',on);
+  setTimeout(()=>{setupAudioDropzone();setupScreenshotDropzones();},0);
+}
+
+function toggleSound(){
+  let on=localStorage.getItem('nq_sound')!=='off';
+  localStorage.setItem('nq_sound',on?'off':'on');
+  document.getElementById('toggle-sound')?.classList.toggle('on',!on);
+}
+
+function fadeAudio(audio,from,to,duration,done){
+  const start=performance.now();
+  const step=now=>{
+    const p=Math.min(1,(now-start)/duration);
+    audio.volume=Math.max(0,Math.min(1,from+(to-from)*p));
+    if(p<1 && !audio.paused)requestAnimationFrame(step);
+    else if(done)done();
+  };
+  requestAnimationFrame(step);
+}
+
+function playAudioWithFade(src,opts={}){
+  if(!src)return;
+  try{
+    if(window.currentWinAudio){
+      window.currentWinAudio.pause();
+      window.currentWinAudio.currentTime=0;
+    }
+    const audio=new Audio(src);
+    window.currentWinAudio=audio;
+    audio.volume=0;
+    audio.preload='auto';
+
+    const maxVolume=opts.preview ? 0.75 : 0.9;
+    const fadeInMs=900;
+    const fadeOutMs=1800;
+
+    const startFadeOut=()=>{
+      if(audio._fadeOutStarted)return;
+      audio._fadeOutStarted=true;
+      fadeAudio(audio,audio.volume,0,fadeOutMs,()=>{
+        audio.pause();
+        audio.currentTime=0;
+      });
+    };
+
+    audio.addEventListener('loadedmetadata',()=>{
+      if(Number.isFinite(audio.duration) && audio.duration > 2.4){
+        const wait=Math.max(0,(audio.duration*1000)-fadeOutMs);
+        setTimeout(startFadeOut,wait);
+      }
+    });
+
+    audio.addEventListener('timeupdate',()=>{
+      if(Number.isFinite(audio.duration) && audio.duration-audio.currentTime <= fadeOutMs/1000){
+        startFadeOut();
+      }
+    });
+
+    audio.addEventListener('ended',()=>{
+      audio.volume=0;
+      if(window.currentWinAudio===audio)window.currentWinAudio=null;
+    });
+
+    audio.play().then(()=>fadeAudio(audio,0,maxVolume,fadeInMs)).catch(()=>{});
+  }catch(e){}
+}
+
+function playWinSound(){
+  if(localStorage.getItem('nq_sound')==='off'||!audioTracks.length)return;
+  const flash=document.getElementById('win-flash');
+  if(flash){
+    flash.classList.add('show');
+    setTimeout(()=>flash.classList.remove('show'),650);
+  }
+  const track=audioTracks[Math.floor(Math.random()*audioTracks.length)];
+  playAudioWithFade(track.dataUrl);
+}
+async function init(){document.getElementById('f-date').value=todayStr();document.getElementById('f-time').value=new Date().toTimeString().slice(0,5);loadSettings();loadAudioSettings();setupScreenshotDropzones();setupAudioDropzone();updateFormSession();await loadTrades();loadGamma();setInterval(updateStatusBar,60000)} init();
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<script id="gamma-accurate-api-js">
+(function(){
+  const API_BASE = "/api/freeflow";
+  const SOURCE_SYMBOL = "QQQ";
+  const NQ_QUOTE_SYMBOL = "NQ=F";
+
+  window.gammaSettings = { exp:"0", colorMode:"classic" };
+  window.gammaAccurateState = { model:null, raw:null, loading:false, error:null, chartError:null, requestUrls:{}, lastSuccess:null, requestId:0 };
+
+  const $ = id => document.getElementById(id);
+  const isNum = v => v !== null && v !== undefined && v !== "" && Number.isFinite(Number(v));
+  const n = v => isNum(v) ? Number(v) : null;
+  const fmt = v => isNum(v) ? Math.round(Number(v)).toLocaleString() : "Not available";
+  const fmtDec = (v,d=2) => isNum(v) ? Number(v).toFixed(d) : "Not available";
+  const fmtSigned = v => {
+    if(!isNum(v)) return "Not available";
+    const x=Number(v), a=Math.abs(x), s=a>=1e9?"B":a>=1e6?"M":a>=1e3?"K":"", div=s==="B"?1e9:s==="M"?1e6:s==="K"?1e3:1;
+    return (x>=0?"+":"-")+(a/div).toFixed(2)+s;
+  };
+  const setText = (id,val) => { const el=$(id); if(el) el.textContent = val; };
+  const todayMid = () => new Date(new Date().toDateString()).getTime();
+  const dteOf = exp => Math.round((new Date(exp+"T00:00:00").getTime() - todayMid()) / 86400000);
+  const scaledGex = gex => isNum(gex) ? Math.sign(Number(gex)) * Math.log10(Math.abs(Number(gex)) + 1) : null;
+
+  function urlFor(endpoint, params={}){
+    const u = new URL(API_BASE, window.location.origin);
+    u.searchParams.set("endpoint", endpoint);
+    Object.entries(params).forEach(([k,v]) => {
+      if(v !== undefined && v !== null && v !== "") u.searchParams.set(k,v);
+    });
+    u.searchParams.set("_t", Date.now().toString());
+    return u.toString();
+  }
+
+  async function getJson(endpoint, params={}){
+    const url = urlFor(endpoint, params);
+    window.gammaAccurateState.requestUrls[endpoint] = url;
+    console.log("API request URL", url);
+    const res = await fetch(url, { cache:"no-store" });
+    const text = await res.text();
+    let json;
+    try { json = text ? JSON.parse(text) : null; } catch { json = { raw:text }; }
+    if(!res.ok) throw new Error(`${endpoint} failed ${res.status}: ${json?.error || json?.message || text || res.statusText}`);
+    return json;
+  }
+
+  function normalizeExpirations(raw){
+    const arr = Array.isArray(raw) ? raw : Array.isArray(raw?.expirations) ? raw.expirations : [];
+    return arr.filter(Boolean).map(String).sort();
+  }
+
+  function resolveExpiration(expirations, selectedDTE){
+    return expirations
+      .map(exp => ({ exp, dte:dteOf(exp), diff:Math.abs(dteOf(exp)-selectedDTE) }))
+      .sort((a,b)=>a.diff-b.diff || a.dte-b.dte)[0]?.exp || null;
+  }
+
+  function snapshotContracts(raw){
+    if(Array.isArray(raw)) return raw;
+    if(Array.isArray(raw?.contracts)) return raw.contracts;
+    if(Array.isArray(raw?.data)) return raw.data;
+    if(Array.isArray(raw?.snapshot)) return raw.snapshot;
+    if(Array.isArray(raw?.chain)) return raw.chain;
+    const arrays = [];
+    function walk(v){
+      if(Array.isArray(v)){ arrays.push(v); v.forEach(walk); }
+      else if(v && typeof v === "object") Object.values(v).forEach(walk);
+    }
+    walk(raw);
+    return arrays.find(a => a.some(x => x && typeof x === "object" && "strike" in x && ("gex" in x || "gamma" in x))) || [];
+  }
+
+  function wallValue(w){
+    if(isNum(w)) return Number(w);
+    if(!w || typeof w !== "object") return null;
+    return n(w.strike ?? w.price ?? w.level ?? w.value);
+  }
+
+  function parseNqQuote(raw){
+    const meta = raw?.chart?.result?.[0]?.meta || {};
+    return n(meta.regularMarketPrice) ?? n(meta.previousClose) ?? n(meta.chartPreviousClose);
+  }
+
+  function rawGexAt(points, nqPrice){
+    if(!points?.length || !isNum(nqPrice)) return null;
+    const sorted = points.slice().sort((a,b)=>a.nqPrice-b.nqPrice);
+    const exact = sorted.find(p => Math.round(p.nqPrice) === Math.round(nqPrice));
+    if(exact) return exact.gex;
+    let lower=null, upper=null;
+    for(const p of sorted){
+      if(p.nqPrice <= nqPrice) lower = p;
+      if(p.nqPrice >= nqPrice){ upper = p; break; }
+    }
+    if(lower && upper && lower.nqPrice !== upper.nqPrice){
+      const t = (nqPrice-lower.nqPrice)/(upper.nqPrice-lower.nqPrice);
+      return lower.gex + t*(upper.gex-lower.gex);
+    }
+    const nearest = sorted.reduce((best,p)=>Math.abs(p.nqPrice-nqPrice)<Math.abs(best.nqPrice-nqPrice)?p:best,sorted[0]);
+    return nearest?.gex ?? null;
+  }
+
+  function zeroCross(points){
+    const row = points.slice().sort((a,b)=>a.nqPrice-b.nqPrice);
+    for(let i=1;i<row.length;i++){
+      const a=row[i-1], b=row[i];
+      if(a.gex === 0) return { nq:a.nqPrice, qqq:a.qqqStrike };
+      if((a.gex < 0 && b.gex > 0) || (a.gex > 0 && b.gex < 0)){
+        const t = (0-a.gex)/(b.gex-a.gex);
+        return { nq:a.nqPrice + t*(b.nqPrice-a.nqPrice), qqq:a.qqqStrike + t*(b.qqqStrike-a.qqqStrike) };
+      }
+    }
+    return { nq:null, qqq:null };
+  }
+
+  function makeMarker(model, name, nqPrice, qqqStrike){
+    if(!isNum(nqPrice)) return null;
+    const gex = rawGexAt(model.surfacePoints, nqPrice);
+    return { name, nqPrice:Number(nqPrice), qqqStrike, rawGex:gex, scaled:scaledGex(gex ?? 0) };
+  }
+
+  function buildGammaModel({expirationsRaw, snapshot, walls, quote, selectedDTE, selectedExpiration}){
+    const contracts = snapshotContracts(snapshot);
+    const qqqSpot = n(snapshot?.spot ?? snapshot?.underlyingPrice ?? snapshot?.referencePrice);
+    const nqReferencePrice = parseNqQuote(quote);
+    const ratio = isNum(nqReferencePrice) && isNum(qqqSpot) && qqqSpot !== 0 ? nqReferencePrice / qqqSpot : null;
+
+    const callWallQqq = wallValue(walls?.call_wall ?? walls?.callWall ?? walls?.call_wall_price ?? walls?.callWallPrice);
+    const putWallQqq = wallValue(walls?.put_wall ?? walls?.putWall ?? walls?.put_wall_price ?? walls?.putWallPrice);
+    let gammaFlipQqq = n(walls?.gamma_flip ?? walls?.gammaFlip ?? walls?.gamma_flip_price ?? walls?.gammaFlipPrice);
+    const totalGex = n(snapshot?.total_gex ?? snapshot?.totalGex ?? walls?.total_gex ?? walls?.net_gex ?? walls?.netGex);
+    const dte = n(snapshot?.dte) ?? selectedDTE;
+
+    const surfacePoints = contracts.map(c => {
+      const qqqStrike = n(c.strike);
+      const gex = n(c.gex);
+      if(!isNum(qqqStrike) || !isNum(gex) || !isNum(ratio)) return null;
+      return { qqqStrike, nqPrice:qqqStrike * ratio, dte, gex, raw:c };
+    }).filter(Boolean).sort((a,b)=>a.nqPrice-b.nqPrice);
+
+    let gammaFlipNq = isNum(gammaFlipQqq) && isNum(ratio) ? gammaFlipQqq * ratio : null;
+    if(!isNum(gammaFlipNq) && surfacePoints.length >= 2){
+      const z = zeroCross(surfacePoints);
+      gammaFlipNq = z.nq;
+      gammaFlipQqq = z.qqq;
+    }
+
+    const model = {
+      sourceSymbol:"QQQ",
+      displaySymbol:"NQ-equivalent",
+      selectedDTE,
+      selectedExpiration,
+      qqqSpot,
+      nqReferencePrice,
+      nqToQqqRatio:ratio,
+      conversionMethod:"QQQ strike × (NQ reference / QQQ spot)",
+      callWallQqq,
+      putWallQqq,
+      gammaFlipQqq,
+      callWallNq:isNum(callWallQqq)&&isNum(ratio) ? callWallQqq*ratio : null,
+      putWallNq:isNum(putWallQqq)&&isNum(ratio) ? putWallQqq*ratio : null,
+      gammaFlipNq,
+      totalGex,
+      snapshotContracts:contracts,
+      surfacePoints,
+      snapshotUrl:window.gammaAccurateState.requestUrls.snapshot,
+      wallsUrl:window.gammaAccurateState.requestUrls.walls,
+      lastReloadTime:new Date().toISOString(),
+      raw:{expirationsRaw, snapshot, walls, quote}
+    };
+
+    model.expectedRangeLow = isNum(model.callWallNq)&&isNum(model.putWallNq) ? Math.min(model.callWallNq,model.putWallNq) : null;
+    model.expectedRangeHigh = isNum(model.callWallNq)&&isNum(model.putWallNq) ? Math.max(model.callWallNq,model.putWallNq) : null;
+    model.callMarker = makeMarker(model, "Call Wall", model.callWallNq, model.callWallQqq);
+    model.putMarker = makeMarker(model, "Put Wall", model.putWallNq, model.putWallQqq);
+    model.flipMarker = makeMarker(model, "Gamma Flip", model.gammaFlipNq, model.gammaFlipQqq);
+
+    const levels = [
+      {name:"Call Wall", value:model.callWallNq},
+      {name:"Put Wall", value:model.putWallNq},
+      {name:"Gamma Flip", value:model.gammaFlipNq}
+    ].filter(x => isNum(x.value) && isNum(model.nqReferencePrice))
+     .map(x => ({...x, dist:Math.abs(model.nqReferencePrice-x.value)}))
+     .sort((a,b)=>a.dist-b.dist);
+    model.closestMajorLevel = levels[0] || null;
+
+    const inside = isNum(model.nqReferencePrice)&&isNum(model.expectedRangeLow)&&model.nqReferencePrice>=model.expectedRangeLow&&model.nqReferencePrice<=model.expectedRangeHigh;
+    const distFlip = isNum(model.nqReferencePrice)&&isNum(model.gammaFlipNq) ? model.nqReferencePrice-model.gammaFlipNq : null;
+    const nearFlip = isNum(distFlip)&&isNum(model.expectedRangeLow)&&Math.abs(distFlip)<=Math.max(25,(model.expectedRangeHigh-model.expectedRangeLow)*.08);
+    model.distanceToGammaFlip = distFlip;
+    model.reactionBias = isNum(model.totalGex) ? (model.totalGex >= 0 ? "Positive Gamma" : "Negative Gamma") : "Not available";
+    model.currentRegime = !isNum(model.totalGex) ? "Not available" : nearFlip ? "Transition" : inside&&model.totalGex>=0 ? "Pinning / Mean Reversion" : inside ? "Mean Reversion" : "Acceleration";
+    return model;
+  }
+
+  function setSourceLine(id, line){
+    const strong = $(id);
+    if(!strong || !strong.parentElement) return;
+    let em = strong.parentElement.querySelector("em[data-source-line]");
+    if(!em){ em = document.createElement("em"); em.dataset.sourceLine = "1"; strong.insertAdjacentElement("afterend", em); }
+    em.textContent = line;
+  }
+
+  function renderCards(model){
+    if(!model) return;
+    setText("gamma-read-title","QQQ options gamma translated to NQ-equivalent levels");
+    setText("gamma-read-text",`Source: QQQ options. Display: NQ-equivalent. Conversion: ${model.conversionMethod}.`);
+    setText("gamma-current-exp-pill",`${model.selectedDTE}DTE · ${model.selectedExpiration}`);
+    setText("gamma-api-pill","QQQ → NQ");
+    setText("gamma-regime-pill","Regime: "+model.currentRegime);
+    setText("gamma-nq-ref",fmt(model.nqReferencePrice));
+    setText("gamma-net-gex",fmtSigned(model.totalGex));
+    setText("gamma-reaction-bias",model.reactionBias);
+    setText("gamma-closest-level",model.closestMajorLevel ? `${model.closestMajorLevel.name} · NQ ${fmt(model.closestMajorLevel.value)}` : "Not available");
+
+    setText("g-call",fmt(model.callWallNq));
+    setText("g-put",fmt(model.putWallNq));
+    setText("g-flip",fmt(model.gammaFlipNq));
+    setText("g-net-gex",fmtSigned(model.totalGex));
+    setText("g-range",isNum(model.expectedRangeLow) ? `${fmt(model.expectedRangeLow)}–${fmt(model.expectedRangeHigh)}` : "Not available");
+    setText("g-spot",fmt(model.nqReferencePrice));
+    setText("g-closest",model.closestMajorLevel ? `${model.closestMajorLevel.name} ${fmt(model.closestMajorLevel.value)}` : "Not available");
+    setText("g-regime",model.currentRegime);
+
+    setSourceLine("g-call",`QQQ source strike: ${fmtDec(model.callWallQqq,2)}`);
+    setSourceLine("g-put",`QQQ source strike: ${fmtDec(model.putWallQqq,2)}`);
+    setSourceLine("g-flip",`QQQ source strike: ${fmtDec(model.gammaFlipQqq,2)}`);
+    setSourceLine("g-spot",`QQQ spot: ${fmtDec(model.qqqSpot,2)} · Ratio: ${fmtDec(model.nqToQqqRatio,2)}x`);
+
+    setText("gamma-status-strip",`Status: Live API · Source: QQQ options · Display: NQ-equivalent · Expiration: ${model.selectedExpiration} · Selected: ${model.selectedDTE}DTE · QQQ spot: ${fmtDec(model.qqqSpot,2)} · NQ ref: ${fmt(model.nqReferencePrice)} · Ratio: ${fmtDec(model.nqToQqqRatio,2)}x`);
+  }
+
+  function renderDebug(model){
+    const dbg = $("gamma-debug-grid");
+    if(!dbg) return;
+    const coord = m => m ? `NQ ${fmt(m.nqPrice)} · QQQ ${fmtDec(m.qqqStrike,2)} · raw ${fmtDec(m.rawGex,2)} · scaled ${fmtDec(m.scaled,2)}` : "Not available";
+    const st = window.gammaAccurateState;
+    const items = [
+      ["Requested symbol","QQQ"],
+      ["Selected DTE",model?.selectedDTE ?? window.gammaSettings.exp],
+      ["Selected expiration date",model?.selectedExpiration || "Not available"],
+      ["Snapshot URL",model?.snapshotUrl || st.requestUrls.snapshot || "Not available"],
+      ["Walls URL",model?.wallsUrl || st.requestUrls.walls || "Not available"],
+      ["Raw QQQ spot",fmtDec(model?.qqqSpot,2)],
+      ["Current NQ reference",fmt(model?.nqReferencePrice)],
+      ["Conversion ratio",fmtDec(model?.nqToQqqRatio,4)],
+      ["Call marker",coord(model?.callMarker)],
+      ["Put marker",coord(model?.putMarker)],
+      ["Flip marker",coord(model?.flipMarker)],
+      ["Contracts loaded",model?.snapshotContracts?.length || 0],
+      ["Surface points",model?.surfacePoints?.length || 0],
+      ["Chart error",st.chartError || "None"],
+      ["API error",st.error || "None"]
+    ];
+    dbg.innerHTML = items.map(([k,v])=>`<div class="gamma-debug-item"><span>${k}</span><strong>${String(v)}</strong></div>`).join("");
+  }
+
+  function setLoading(on){
+    window.gammaAccurateState.loading = on;
+    const btn = $("gamma-reload-btn"), cover = $("gamma-loading-cover");
+    if(btn){ btn.disabled = on; btn.textContent = on ? "Refreshing..." : "Reload"; }
+    if(cover) cover.classList.toggle("show", on);
+    if(on && !window.gammaAccurateState.model){
+      setText("gamma-read-title","Loading gamma read...");
+      setText("gamma-read-text","Fetching QQQ options gamma and NQ reference...");
+      setText("gamma-status-strip","Status: Loading API · Source: QQQ options · Display: NQ-equivalent");
+    } else if(on) {
+      setText("gamma-status-strip","Status: Refreshing API · keeping previous values visible");
+    }
+  }
+
+  function setError(msg){
+    window.gammaAccurateState.error = msg || null;
+    const box = $("gamma-error-box");
+    if(box){ box.textContent = msg || ""; box.classList.toggle("show", !!msg); }
+  }
+
+  function showChartMessage(show, msg="Chart unavailable"){
+    const el = $("gamma-no-data");
+    if(el){ el.innerHTML = msg; el.classList.toggle("show", !!show); }
+  }
+
+
+
+
+
+  function colorScaleForMode(mode){
+    const scales = {
+      classic: [
+        [0, "#be123c"], [0.42, "#fecdd3"], [0.50, "#f8fafc"], [0.58, "#ccfbf1"], [1, "#0f766e"]
+      ],
+      contrast: [
+        [0, "#7f1d1d"], [0.45, "#ef4444"], [0.50, "#ffffff"], [0.55, "#22c55e"], [1, "#065f46"]
+      ],
+      heatmap: [
+        [0, "#312e81"], [0.25, "#2563eb"], [0.48, "#a78bfa"], [0.62, "#facc15"], [0.82, "#f97316"], [1, "#991b1b"]
+      ],
+      iceberg: [
+        [0, "#312e81"], [0.25, "#4f46e5"], [0.50, "#06b6d4"], [0.75, "#67e8f9"], [1, "#ecfeff"]
+      ],
+      liquidity: [
+        [0, "#1a1814"], [0.28, "#7c2d12"], [0.52, "#f97316"], [0.76, "#facc15"], [1, "#fff7ed"]
+      ],
+      bookmaplight: [
+        [0, "#f8fafc"], [0.25, "#fde68a"], [0.50, "#fb923c"], [0.75, "#ef4444"], [1, "#7f1d1d"]
+      ],
+      blue: [
+        [0, "#eff6ff"], [0.18, "#dbeafe"], [0.36, "#93c5fd"], [0.56, "#3b82f6"], [0.78, "#1d4ed8"], [1, "#0f172a"]
+      ]
+    };
+    return scales[(mode || "classic").replace(/[-_\s]/g,"").toLowerCase()] || scales.classic;
+  }
+
+  function chartRows(model){
+    if(!model?.surfacePoints?.length) return [];
+    const map = new Map();
+    model.surfacePoints.forEach(p => {
+      const key = Math.round(p.nqPrice);
+      if(!map.has(key)) map.set(key, []);
+      map.get(key).push(p);
+    });
+
+    let rows = [...map.entries()].map(([price, arr]) => {
+      const raw = arr.reduce((s,p)=>s+p.gex,0)/arr.length;
+      const qqq = arr.reduce((s,p)=>s+p.qqqStrike,0)/arr.length;
+      return { nqPrice:Number(price), qqqStrike:qqq, rawGex:raw, scaledGex:scaledGex(raw) };
+    }).filter(r=>isNum(r.nqPrice)&&isNum(r.scaledGex)).sort((a,b)=>a.nqPrice-b.nqPrice);
+
+    const anchors = [model.nqReferencePrice, model.callWallNq, model.putWallNq, model.gammaFlipNq].filter(isNum).map(Number);
+    if(anchors.length){
+      const lo = Math.min(...anchors), hi = Math.max(...anchors);
+      const pad = Math.max(650, (hi - lo) * 1.25);
+      const filtered = rows.filter(r => r.nqPrice >= lo - pad && r.nqPrice <= hi + pad);
+      if(filtered.length >= 14) rows = filtered;
+    }
+    return rows;
+  }
+
+  function interpRows(rows, x){
+    if(!rows.length) return { rawGex:null, qqqStrike:null, scaledGex:null };
+    const exact = rows.find(r => Math.round(r.nqPrice) === Math.round(x));
+    if(exact) return exact;
+    let lo = null, hi = null;
+    for(const r of rows){
+      if(r.nqPrice <= x) lo = r;
+      if(r.nqPrice >= x){ hi = r; break; }
+    }
+    if(lo && hi && lo.nqPrice !== hi.nqPrice){
+      const t = (x - lo.nqPrice) / (hi.nqPrice - lo.nqPrice);
+      const rawGex = lo.rawGex + t * (hi.rawGex - lo.rawGex);
+      const qqqStrike = lo.qqqStrike + t * (hi.qqqStrike - lo.qqqStrike);
+      return { nqPrice:x, qqqStrike, rawGex, scaledGex:scaledGex(rawGex) };
+    }
+    return lo || hi || rows[0];
+  }
+
+  function percentile(arr, p){
+    if(!arr.length) return 0;
+    const a = arr.slice().sort((x,y)=>x-y);
+    const idx = Math.max(0, Math.min(a.length-1, Math.round((a.length-1)*p)));
+    return a[idx];
+  }
+
+  function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
+
+  function smoothLine(values, passes=5){
+    let out = values.slice();
+    for(let p=0;p<passes;p++){
+      out = out.map((v,i,arr)=>{
+        const a = arr[Math.max(0,i-2)];
+        const b = arr[Math.max(0,i-1)];
+        const c = arr[i];
+        const d = arr[Math.min(arr.length-1,i+1)];
+        const e = arr[Math.min(arr.length-1,i+2)];
+        return (a + b*2 + c*3 + d*2 + e) / 9;
+      });
+    }
+    return out;
+  }
+
+  function buildTerrain(model){
+    const rows = chartRows(model);
+    if(rows.length < 2) throw new Error("Not enough chart rows.");
+    const xMin = rows[0].nqPrice;
+    const xMax = rows[rows.length - 1].nqPrice;
+    const xSteps = 150;
+    const ySteps = 76;
+    const yMax = Math.max(4, Number(model.selectedDTE || 0) + 4.75);
+
+    const x = Array.from({length:xSteps}, (_,i)=>xMin + (xMax-xMin)*i/(xSteps-1));
+    const y = Array.from({length:ySteps}, (_,i)=>yMax*i/(ySteps-1));
+
+    const baseRaw = x.map(xx => interpRows(rows, xx));
+    let baseScaled = baseRaw.map(src => src.scaledGex || 0);
+
+    const visualVals = baseScaled.filter(isNum).map(Number);
+    let zLo = percentile(visualVals, .08);
+    let zHi = percentile(visualVals, .92);
+    const zAbs = Math.max(Math.abs(zLo), Math.abs(zHi), 1);
+    zLo = -zAbs;
+    zHi = zAbs;
+
+    baseScaled = smoothLine(baseScaled.map(v => clamp(v, zLo, zHi)), 8);
+
+    function terrainZByIndex(xi, yy){
+      const clipped = baseScaled[xi] || 0;
+      const decay = Math.max(0.60, 1 - (yy / (yMax * 3.2)));
+      const wave = Math.sin(xi * 0.10 + yy * 0.95) * 0.035 + Math.cos(xi * 0.055 - yy * 0.72) * 0.028;
+      return clipped * decay + wave;
+    }
+
+    function terrainZ(xx, yy){
+      if(xx <= xMin) return terrainZByIndex(0, yy);
+      if(xx >= xMax) return terrainZByIndex(xSteps-1, yy);
+      const pos = (xx - xMin) / (xMax - xMin) * (xSteps-1);
+      const i = Math.floor(pos);
+      const t = pos - i;
+      return terrainZByIndex(i, yy) * (1-t) + terrainZByIndex(Math.min(xSteps-1,i+1), yy) * t;
+    }
+
+    const z = y.map((yy) => x.map((xx, xi) => terrainZByIndex(xi, yy)));
+
+    const current = isNum(model.nqReferencePrice) ? Number(model.nqReferencePrice) : (xMin+xMax)/2;
+    const pathY = Array.from({length:14}, (_,i)=>yMax*(0.10 + i*0.78/13));
+    const pathX = pathY.map((yy,i)=> clamp(current + Math.sin(i*.55)*16 + (i-6.5)*3, xMin, xMax));
+    const pathZ = pathX.map((px,i)=> terrainZ(px, pathY[i]) + 0.18);
+
+    const flat = z.flat().filter(isNum);
+    return { rows, x, y, z, terrainZ, path:{x:pathX,y:pathY,z:pathZ}, xMin, xMax, yMin:0, yMax, zMin:Math.min(...flat), zMax:Math.max(...flat) };
+  }
+
+  function formatMoneyTick(v){
+    if(!isNum(v)) return "";
+    const n = Number(v);
+    if(Math.abs(n) >= 1e9) return (n/1e9).toFixed(1).replace(".0","")+"B";
+    if(Math.abs(n) >= 1e6) return (n/1e6).toFixed(0)+"M";
+    if(Math.abs(n) >= 1e3) return (n/1e3).toFixed(0)+"K";
+    return n.toFixed(0);
+  }
+
+  function buildBars(model){
+    const rows = chartRows(model);
+    if(rows.length < 2) throw new Error("Not enough bar rows.");
+    const posRows = rows.filter(r => r.rawGex >= 0);
+    const negRows = rows.filter(r => r.rawGex < 0);
+    const toCustom = r => [r.nqPrice,r.qqqStrike,r.rawGex,r.scaledGex,model.selectedExpiration];
+
+    const traces = [
+      {
+        type:"bar",
+        name:"Positive GEX",
+        x:posRows.map(r=>r.nqPrice),
+        y:posRows.map(r=>r.rawGex),
+        customdata:posRows.map(toCustom),
+        marker:{color:"rgba(52,211,153,.88)",line:{color:"rgba(52,211,153,1)",width:1}},
+        hovertemplate:"Positive GEX<br>NQ %{customdata[0]:.0f}<br>QQQ strike %{customdata[1]:.2f}<br>Raw QQQ GEX %{customdata[2]:.2f}<br>Scaled %{customdata[3]:.2f}<br>Expiration %{customdata[4]}<extra></extra>"
+      },
+      {
+        type:"bar",
+        name:"Negative GEX",
+        x:negRows.map(r=>r.nqPrice),
+        y:negRows.map(r=>r.rawGex),
+        customdata:negRows.map(toCustom),
+        marker:{color:"rgba(248,113,113,.88)",line:{color:"rgba(248,113,113,1)",width:1}},
+        hovertemplate:"Negative GEX<br>NQ %{customdata[0]:.0f}<br>QQQ strike %{customdata[1]:.2f}<br>Raw QQQ GEX %{customdata[2]:.2f}<br>Scaled %{customdata[3]:.2f}<br>Expiration %{customdata[4]}<extra></extra>"
+      }
+    ];
+
+    const xs = rows.map(r=>r.nqPrice);
+    const ys = rows.map(r=>r.rawGex);
+
+    const shapes = [{type:"line",xref:"x",yref:"y",x0:Math.min(...xs),x1:Math.max(...xs),y0:0,y1:0,line:{color:"rgba(148,163,184,.35)",width:1}}];
+    const annotations = [];
+
+    function addVLine(value, color, label, dash="dot", yPos="top"){
+      if(!isNum(value)) return;
+      const yMax = Math.max(...ys, 0);
+      const yMin = Math.min(...ys, 0);
+      shapes.push({type:"line",xref:"x",yref:"paper",x0:value,x1:value,y0:0,y1:1,line:{color,width:2,dash}});
+      annotations.push({
+        x:value,
+        y:yPos==="top" ? 1.02 : -0.08,
+        xref:"x",
+        yref:"paper",
+        text:`${label} ${fmt(value)}`,
+        showarrow:false,
+        font:{color,size:12},
+        bgcolor:"rgba(21,26,33,.82)",
+        bordercolor:color,
+        borderwidth:1,
+        borderpad:4
+      });
+    }
+
+    addVLine(model.nqReferencePrice, "#facc15", "Spot", "dash", "top");
+    addVLine(model.callWallNq, "#34d399", "CW", "dot", "top");
+    addVLine(model.putWallNq, "#f87171", "PW", "dot", "top");
+    addVLine(model.gammaFlipNq, "#a78bfa", "Flip", "dot", "bottom");
+
+    return { traces, layoutExtras:{shapes, annotations}, rows };
+  }
+
+  function buildChart(model){
+    const chartType = window.gammaSettings?.chartType || "surface";
+    if(chartType === "bars"){
+      return { mode:"bars", ...buildBars(model) };
+    }
+
+    const terrain = buildTerrain(model);
+    const colorMode = window.gammaSettings?.colorMode || "classic";
+    const scale = colorScaleForMode(colorMode);
+
+    const traces = [{
+      type:"surface",
+      name:"Gamma exposure surface",
+      x:terrain.x,
+      y:terrain.y,
+      z:terrain.z,
+      colorscale:scale,
+      showscale:true,
+      colorbar:{title:`${colorMode} gamma`,thickness:14,len:.70,x:.985,y:.52,tickfont:{size:10},titlefont:{size:11}},
+      lighting:{ambient:.72,diffuse:.76,fresnel:.14,roughness:.62,specular:.14},
+      opacity:.96,
+      contours:{
+        x:{show:true,color:"rgba(26,24,18,.14)",width:1,project:{x:true}},
+        y:{show:true,color:"rgba(26,24,18,.14)",width:1,project:{y:true}},
+        z:{show:true,usecolormap:true,highlightcolor:"#facc15",project:{z:true}}
+      },
+      customdata: terrain.z.map((row, yi)=>row.map((_, xi)=>{
+        const src = interpRows(terrain.rows, terrain.x[xi]);
+        return {nq:terrain.x[xi], qqq:src.qqqStrike, rawGex:src.rawGex, exp:model.selectedExpiration};
+      })),
+      hovertemplate:"NQ price: %{customdata.nq:.0f}<br>DTE / expiration path: %{y:.2f}<br>Raw QQQ GEX: %{customdata.rawGex:.2f}<br>QQQ strike: %{customdata.qqq:.2f}<br>Visual scaled gamma: %{z:.2f}<extra></extra>"
+    }];
+
+    traces.push({
+      type:"scatter3d",
+      mode:"lines+markers",
+      name:"Current NQ path",
+      x:terrain.path.x,
+      y:terrain.path.y,
+      z:terrain.path.z,
+      line:{color:"#facc15",width:9},
+      marker:{color:"#fde047",size:5,line:{color:"#1a1814",width:1}},
+      hovertemplate:"Current NQ path<br>Price: %{x:.0f}<br>DTE path: %{y:.2f}<br>Surface height: %{z:.2f}<extra></extra>"
+    });
+
+    function levelPoint(marker, color, label, yPct){
+      if(!marker || !isNum(marker.nqPrice)) return;
+      const src = interpRows(terrain.rows, marker.nqPrice);
+      const y0 = terrain.yMax * yPct;
+      const zVal = terrain.terrainZ(marker.nqPrice, y0) + 0.28;
+      traces.push({
+        type:"scatter3d",
+        mode:"markers+text",
+        name:label,
+        x:[marker.nqPrice],
+        y:[y0],
+        z:[zVal],
+        marker:{color,size:8,line:{color:"#ffffff",width:1.5}},
+        text:[`${label} ${fmt(marker.nqPrice)}`],
+        textposition:"top center",
+        textfont:{color,size:11,family:"DM Sans"},
+        hovertemplate:`${label}<br>NQ: ${fmt(marker.nqPrice)}<br>QQQ source: ${fmtDec(marker.qqqStrike,2)}<br>Raw GEX: ${fmtDec(src.rawGex,2)}<extra></extra>`
+      });
+    }
+
+    levelPoint(model.callMarker, "#087a50", "Call Wall", .10);
+    levelPoint(model.putMarker, "#be123c", "Put Wall", .20);
+    levelPoint(model.flipMarker, "#6d28d9", "Gamma Flip", .30);
+
+    return { mode:"surface", traces, terrain };
+  }
+
+  function renderChart(model){
+    try{
+      window.gammaAccurateState.chartError = null;
+      if(!window.Plotly || !$("gamma-chart")) throw new Error("Plotly missing.");
+      const built = buildChart(model);
+      console.log("Chart traces", built.traces);
+      showChartMessage(false);
+
+      const pageGamma = $("page-gamma");
+      if(pageGamma) pageGamma.classList.toggle("gamma-bar-mode", built.mode === "bars");
+
+      if(built.mode === "bars"){
+        const xs = built.rows.map(r=>r.nqPrice);
+        const ys = built.rows.map(r=>r.rawGex);
+        const yAbs = Math.max(...ys.map(v=>Math.abs(v)), 1);
+
+        // TRUE FLAT 2D chart. No scene, no surface, no 3D camera.
+        window.Plotly.react("gamma-chart", built.traces, {
+          autosize:true,
+          height:650,
+          margin:{l:78,r:34,t:54,b:78},
+          paper_bgcolor:"#151a21",
+          plot_bgcolor:"#151a21",
+          showlegend:true,
+          legend:{
+            orientation:"h",
+            x:0.98,
+            y:1.12,
+            xanchor:"right",
+            yanchor:"top",
+            font:{size:12,color:"#94a3b8"},
+            bgcolor:"rgba(21,26,33,0)"
+          },
+          shapes:built.layoutExtras.shapes,
+          annotations:built.layoutExtras.annotations,
+          xaxis:{
+            title:{text:"NQ-Equivalent Price Levels",font:{size:13,color:"#cbd5e1"}},
+            tickfont:{size:12,color:"#64748b"},
+            gridcolor:"rgba(148,163,184,.08)",
+            zeroline:false,
+            linecolor:"rgba(148,163,184,.18)",
+            tickformat:".3s",
+            ticks:"outside",
+            ticklen:5,
+            range:[Math.min(...xs)-80, Math.max(...xs)+80]
+          },
+          yaxis:{
+            title:{text:"Raw QQQ Net GEX by Strike",font:{size:13,color:"#cbd5e1"}},
+            tickfont:{size:12,color:"#64748b"},
+            gridcolor:"rgba(148,163,184,.10)",
+            zeroline:true,
+            zerolinecolor:"rgba(226,232,240,.25)",
+            zerolinewidth:1,
+            linecolor:"rgba(148,163,184,.18)",
+            ticks:"outside",
+            ticklen:5,
+            range:[-yAbs*1.20, yAbs*1.20],
+            tickformat:".2s"
+          },
+          bargap:.24,
+          hovermode:"x unified"
+        }, {responsive:true,displaylogo:false,modeBarButtonsToRemove:["toImage","lasso2d","select2d"]});
+        return;
+      }
+
+      const terrain = built.terrain;
+      window.Plotly.react("gamma-chart", built.traces, {
+        autosize:true,
+        height:650,
+        margin:{l:0,r:0,b:0,t:0},
+        paper_bgcolor:"#fbfaf7",
+        plot_bgcolor:"#fbfaf7",
+        showlegend:true,
+        legend:{x:.02,y:.98,bgcolor:"rgba(255,255,255,.78)",bordercolor:"rgba(26,24,18,.08)",borderwidth:1,font:{size:11}},
+        scene:{
+          bgcolor:"#fbfaf7",
+          xaxis:axis3d("X: NQ-Equivalent Price Levels",[terrain.xMin,terrain.xMax], "price"),
+          yaxis:axis3d("Y: DTE / Expiration Path",[terrain.yMin,terrain.yMax], "dte"),
+          zaxis:axis3d("Z: Smoothed Scaled Gamma Exposure",[terrain.zMin,terrain.zMax], "gamma"),
+          camera:{eye:{x:1.35,y:1.35,z:.82},center:{x:0,y:0,z:0}},
+          aspectratio:{x:1.45,y:1.05,z:.68},
+          dragmode:"turntable"
+        }
+      }, {responsive:true,scrollZoom:true,displaylogo:false,modeBarButtonsToRemove:["toImage","lasso2d","select2d"]});
+    } catch(error){
+      console.error("Gamma chart failed", error);
+      window.gammaAccurateState.chartError = error.message || String(error);
+      showChartMessage(true,"Chart unavailable<br>Cards are still using live gamma data.");
+    } finally {
+      renderDebug(model);
+    }
+  }
+
+  function axis3d(title, range, kind){
+    return {
+      title:{text:title,font:{size:12,color:"#1a1814"}},
+      range,
+      showgrid:true,
+      gridcolor:"rgba(26,24,18,.22)",
+      gridwidth:1,
+      zeroline:true,
+      zerolinecolor:"rgba(26,24,18,.34)",
+      showline:true,
+      linecolor:"rgba(26,24,18,.40)",
+      ticks:"outside",
+      ticklen:5,
+      tickfont:{size:10,color:"#4f4943"},
+      showbackground:true,
+      backgroundcolor:"rgba(255,255,255,.46)",
+      nticks:kind==="dte"?6:8,
+      tickformat:kind==="price" ? ".3s" : undefined
+    };
+  }
+
+  function renderGamma(){
+    const model = window.gammaAccurateState.model;
+    if(model){ renderCards(model); renderChart(model); }
+    renderDebug(model);
+  }
+  window.renderGamma = renderGamma;
+
+  async function loadGammaData(){
+    const requestId = ++window.gammaAccurateState.requestId;
+    console.log("Gamma load started");
+    const selectedDTE = Number(window.gammaSettings.exp || 0);
+    console.log("Selected DTE", selectedDTE);
+    window.gammaAccurateState.requestUrls = {};
+    setLoading(true);
+    try{
+      const expirationsRaw = await getJson("expirations",{symbol:"QQQ"});
+      const expirations = normalizeExpirations(expirationsRaw);
+      const selectedExpiration = resolveExpiration(expirations, selectedDTE);
+      console.log("Resolved expiration", selectedExpiration);
+      if(!selectedExpiration) throw new Error("No QQQ expiration date found.");
+
+      const [snapshot, walls, quote] = await Promise.all([
+        getJson("snapshot",{symbol:"QQQ",exp:selectedExpiration}),
+        getJson("walls",{symbol:"QQQ",exp:selectedExpiration}),
+        getJson("quote",{symbol:"NQ=F"})
+      ]);
+      console.log("Snapshot response", snapshot);
+      console.log("Walls response", walls);
+
+      if(requestId !== window.gammaAccurateState.requestId) return;
+
+      const model = buildGammaModel({expirationsRaw, snapshot, walls, quote, selectedDTE, selectedExpiration});
+      console.log("Parsed gamma model", model);
+      if(!model.surfacePoints.length && !isNum(model.callWallNq) && !isNum(model.putWallNq)) throw new Error("No usable QQQ gamma data found.");
+
+      window.gammaAccurateState.raw = {expirationsRaw, snapshot, walls, quote};
+      window.gammaAccurateState.model = model;
+      window.gammaAccurateState.lastSuccess = new Date().toISOString();
+      setError(null);
+      renderCards(model);
+      renderChart(model);
+      console.log("Gamma load complete");
+    } catch(error){
+      console.error("Gamma load failed", error);
+      if(requestId !== window.gammaAccurateState.requestId) return;
+      setError(error.message || String(error));
+      if(window.gammaAccurateState.model){
+        renderGamma();
+      } else {
+        setText("gamma-read-title","Gamma load failed");
+        setText("gamma-read-text","Check the error box and Debug panel. No previous gamma model is available.");
+        setText("gamma-status-strip","Status: Error · Source: QQQ options · Display: NQ-equivalent");
+        showChartMessage(true,"Chart unavailable<br>No gamma model loaded.");
+      }
+      renderDebug(window.gammaAccurateState.model);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  window.loadGamma = loadGammaData;
+  window.setGammaExpiration = function(v){ window.gammaSettings.exp = String(v); loadGammaData(); };
+  window.setGammaColorMode = function(v){ window.gammaSettings.colorMode = v; renderGamma(); };
+  window.setGammaChartType = function(v){
+    window.gammaSettings.chartType = v || "surface";
+    const s = document.getElementById("gamma-chart-type");
+    if(s && s.value !== window.gammaSettings.chartType) s.value = window.gammaSettings.chartType;
+    renderGamma();
+  };
+  window.toggleGammaDebug = function(){
+    const p = $("gamma-debug-panel");
+    if(p) p.classList.toggle("open");
+    renderDebug(window.gammaAccurateState.model);
+  };
+  document.addEventListener("DOMContentLoaded",()=>setTimeout(loadGammaData,350));
+})();
+</script>
+
 </body>
-</html>
+</html
+
+>
