@@ -713,6 +713,13 @@ html,body{background:linear-gradient(115deg,#fbfaf7 0%,#f5f3ee 52%,#eef0f4 100%)
 }
 </style>
 
+
+<style id="calendar-connect-fix">
+.cal-day{cursor:pointer;transition:.15s ease}
+.cal-day:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(26,24,18,.08)}
+.cal-day small{font-size:10px;line-height:1.25}
+</style>
+
 </head>
 <body>
 <div class="app">
@@ -981,7 +988,10 @@ const SUPA_URL='https://najvjcciafmorqxsuhfi.supabase.co';
 const SUPA_KEY='sb_publishable_1OtFJtxKDVhheE8QBza74w_PhezqzWH';
 const FREEFLOW_KEY='ff_Ys_KBZCY2cEwx7fV6KQcriRjRhyvfvLMNitL0_dh8WU';
 let trades=[],settings={},ssFiles=[],ssFilesOf=[],ssFilesBm=[],audioTracks=[],historyFilter='all',currentPage='today',camera={eye:{x:1.52,y:1.18,z:.82},center:{x:0,y:0,z:0}};
-function todayStr(){return new Date().toISOString().split('T')[0]} function money(n){n=Number(n||0);return (n>=0?'+$':'-$')+Math.abs(n).toLocaleString()} function toast(m,t){let e=document.getElementById('toast');e.textContent=m;e.className='toast '+(t||'')+' show';clearTimeout(window._toast);window._toast=setTimeout(()=>e.classList.remove('show'),2800)}
+function todayStr(){return new Date().toISOString().split('T')[0]} function money(n){n=Number(n||0);return (n>=0?'+$':'-$')+Math.abs(n).toLocaleString()}
+function tradeDate(t){return String(t?.date||t?.trade_date||t?.created_at||'').slice(0,10)}
+function tradePnlValue(t){return Number(t?.pnl_usd ?? t?.pnl ?? t?.profit_loss ?? t?.net_pnl ?? 0)||0}
+function refreshCalendarNow(){try{renderStats();renderCalendar()}catch(e){console.warn('Calendar refresh skipped',e)}} function toast(m,t){let e=document.getElementById('toast');e.textContent=m;e.className='toast '+(t||'')+' show';clearTimeout(window._toast);window._toast=setTimeout(()=>e.classList.remove('show'),2800)}
 async function sbSelect(table,order='created_at.desc'){let r=await fetch(SUPA_URL+'/rest/v1/'+table+'?select=*&order='+order,{headers:{apikey:SUPA_KEY,Authorization:'Bearer '+SUPA_KEY}});if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}
 async function sbInsert(table,row){let r=await fetch(SUPA_URL+'/rest/v1/'+table,{method:'POST',headers:{apikey:SUPA_KEY,Authorization:'Bearer '+SUPA_KEY,'Content-Type':'application/json',Prefer:'return=representation'},body:JSON.stringify(row)});if(!r.ok)throw new Error(await r.text());return r.json()}
 async function sbUpdate(table,id,row){let r=await fetch(SUPA_URL+'/rest/v1/'+table+'?id=eq.'+id,{method:'PATCH',headers:{apikey:SUPA_KEY,Authorization:'Bearer '+SUPA_KEY,'Content-Type':'application/json',Prefer:'return=representation'},body:JSON.stringify(row)});if(!r.ok)throw new Error(await r.text());return r.json()}
@@ -997,7 +1007,7 @@ function updateStatusBar(){let n=new Date(),mins=n.getHours()*60+n.getMinutes(),
 function renderAll(){
   renderToday();
   renderHistory();
-  if(currentPage==='stats') renderStats();
+  renderStats(); // keeps Stats + calendar connected to every saved trade
   renderEquity();
   updateStatusBar();
 }
@@ -1069,7 +1079,7 @@ function renderHistory(){
     const wins=dayTrades.filter(t=>t.outcome==='Win').length;
     const losses=dayTrades.filter(t=>t.outcome==='Loss').length;
     const r=dayTrades.reduce((s,t)=>s+(Number(t.r_result)||0),0);
-    return `<section class="history-day-group">
+    return `<section class="history-day-group" data-date="${d}">
       <div class="history-day-header">
         <div>
           <div class="history-day-title">${dayLabel(d)}</div>
@@ -1186,7 +1196,7 @@ function setupScreenshotDropzones(){
 }
 
 async function uploadScreenshots(){let groups=[{files:ssFilesOf,tag:'of'},{files:ssFilesBm,tag:'bm'},{files:ssFiles,tag:'other'}],urls=[];for(let g of groups){for(let file of g.files.filter(Boolean)){let ext=file.name.split('.').pop()||'jpg',path='trade-'+g.tag+'-'+Date.now()+'-'+Math.random().toString(36).slice(2,7)+'.'+ext;try{let r=await fetch(SUPA_URL+'/storage/v1/object/screenshots/'+path,{method:'POST',headers:{apikey:SUPA_KEY,Authorization:'Bearer '+SUPA_KEY,'Content-Type':file.type||'image/jpeg','x-upsert':'true'},body:file});if(r.ok)urls.push(SUPA_URL+'/storage/v1/object/public/screenshots/'+path)}catch(e){}}}return urls}
-async function saveTrade(){let btn=document.getElementById('save-btn'),editId=btn.dataset.editId||'',date=document.getElementById('f-date').value,direction=getToggle('direction'),outcome=getToggle('outcome'),why=document.getElementById('f-why').value.trim();if(!date||!direction||!outcome){toast('Date, direction, and outcome required','red');return}if(!why){toast('Please explain why you took this trade','red');return}btn.disabled=true;btn.textContent='Saving...';try{let time=document.getElementById('f-time').value,shots=await uploadScreenshots(),trade={date,direction,outcome,notes:(document.getElementById('f-notes').value||'')+(time?'\nTime: '+time:''),session:getSessionLabel(time),confluences:getSelectedConfs(),instrument:'NQ',r_result:parseFloat(document.getElementById('f-r').value)||null,pnl_usd:parseFloat(document.getElementById('f-pnl').value)||null,emotion:getToggle('emotion'),why_taken:why,setup_num:getToggle('setup'),played_out:getToggle('played_out'),poi_type:getToggle('poi_type'),screenshot_urls:shots};let saved=editId?await sbUpdate('trades',editId,trade):await sbInsert('trades',trade);if(outcome==='Win')playWinSound();clearForm();await loadTrades();navTo(editId?'history':'today');toast('Trade saved','green')}catch(e){toast('Save failed: '+e.message,'red')}btn.disabled=false;btn.textContent='Save Trade'}
+async function saveTrade(){let btn=document.getElementById('save-btn'),editId=btn.dataset.editId||'',date=document.getElementById('f-date').value,direction=getToggle('direction'),outcome=getToggle('outcome'),why=document.getElementById('f-why').value.trim();if(!date||!direction||!outcome){toast('Date, direction, and outcome required','red');return}if(!why){toast('Please explain why you took this trade','red');return}btn.disabled=true;btn.textContent='Saving...';try{let time=document.getElementById('f-time').value,shots=await uploadScreenshots(),trade={date,direction,outcome,notes:(document.getElementById('f-notes').value||'')+(time?'\nTime: '+time:''),session:getSessionLabel(time),confluences:getSelectedConfs(),instrument:'NQ',r_result:parseFloat(document.getElementById('f-r').value)||null,pnl_usd:parseFloat(document.getElementById('f-pnl').value)||null,emotion:getToggle('emotion'),why_taken:why,setup_num:getToggle('setup'),played_out:getToggle('played_out'),poi_type:getToggle('poi_type'),screenshot_urls:shots};let saved=editId?await sbUpdate('trades',editId,trade):await sbInsert('trades',trade);if(outcome==='Win')playWinSound();clearForm();await loadTrades();refreshCalendarNow();navTo(editId?'history':'today');toast('Trade saved · calendar updated','green')}catch(e){toast('Save failed: '+e.message,'red')}btn.disabled=false;btn.textContent='Save Trade'}
 function clearForm(){['f-date','f-time','f-r','f-pnl','f-why','f-notes'].forEach(id=>{let e=document.getElementById(id);if(e)e.value=id==='f-date'?todayStr():id==='f-time'?new Date().toTimeString().slice(0,5):''});document.querySelectorAll('.btt').forEach(b=>b.className='btt');document.querySelectorAll('[data-core="1"]').forEach(b=>b.className='btt sel-core');['ss-previews','ss-previews-of','ss-previews-bm'].forEach(id=>document.getElementById(id).innerHTML='');ssFiles=[];ssFilesOf=[];ssFilesBm=[];document.getElementById('cancel-edit-btn').style.display='none';document.getElementById('save-btn').dataset.editId='';updateFormSession()}
 function cancelEdit(){clearForm();navTo('history')} function updateFormSession(){let e=document.getElementById('form-session');if(e)e.textContent=getSessionLabel(document.getElementById('f-time').value)||'—'} document.addEventListener('input',e=>{if(e.target.id==='f-time')updateFormSession()})
 function openModal(id){let t=trades.find(x=>x.id==id);if(!t)return;document.getElementById('modal-title').textContent=(t.direction||'Trade')+' · '+(t.outcome||'');let shots=t.screenshot_urls||[];document.getElementById('modal-body').innerHTML=`<div class="grid grid-3"><div class="card"><div class="card-label">P&L</div><div class="level-val ${Number(t.pnl_usd)>=0?'pos':'neg'}">${t.pnl_usd!=null?money(t.pnl_usd):'—'}</div></div><div class="card"><div class="card-label">R</div><div class="level-val">${t.r_result??'—'}</div></div><div class="card"><div class="card-label">Session</div><div class="level-val">${t.session||'—'}</div></div></div><div class="modal-section"><div class="card-label">Why</div><p style="line-height:1.7">${t.why_taken||'—'}</p></div><div class="modal-section"><div class="card-label">Notes</div><p style="white-space:pre-wrap;line-height:1.7">${t.notes||'—'}</p></div><div class="modal-section"><div class="card-label">Screenshots</div><div class="grid grid-2">${shots.length?shots.map(u=>`<img src="${u}" style="width:100%;border-radius:14px;cursor:zoom-in" onclick="openLightbox('${u}')">`).join(''):'<span class="muted">No screenshots</span>'}</div></div>`;document.getElementById('modal-del').onclick=()=>deleteTrade(id);document.getElementById('modal-edit').onclick=()=>editTrade(id);document.getElementById('modal').classList.add('open')}
@@ -1198,7 +1208,45 @@ function getStreak(){let list=trades.filter(t=>t.outcome==='Win'||t.outcome==='L
 function breakdown(id,items){document.getElementById(id).innerHTML=items.filter(i=>i.arr.length).map(i=>{let w=i.arr.filter(t=>t.outcome==='Win').length,l=i.arr.filter(t=>t.outcome==='Loss').length,p=w+l?Math.round(w/(w+l)*100):0,c=p>=60?'var(--green)':p>=45?'var(--amber)':'var(--red)';return`<div class="bkd-row"><div class="bkd-label">${i.label} <span class="muted">(${i.arr.length})</span></div><div class="bkd-bar-wrap"><div class="bkd-bar" style="width:${p}%;background:${c}"></div></div><div class="bkd-val" style="color:${c}">${p||'—'}%</div></div>`}).join('')||'<div class="muted">No data</div>'}
 function renderConf(){let map={};trades.forEach(t=>Object.entries(t.confluences||{}).forEach(([k,v])=>{if(v){map[k]=map[k]||{w:0,l:0,n:0};map[k].n++;if(t.outcome==='Win')map[k].w++;if(t.outcome==='Loss')map[k].l++}}));document.getElementById('conf-corr-table').innerHTML=Object.entries(map).map(([k,s])=>{let p=s.w+s.l?Math.round(s.w/(s.w+s.l)*100):0;return`<div class="bkd-row"><div class="bkd-label">${k} <span class="muted">(${s.n})</span></div><div class="bkd-bar-wrap"><div class="bkd-bar" style="width:${p}%;background:var(--green)"></div></div><div class="bkd-val">${p}%</div></div>`}).join('')||'<div class="muted">No confluence data</div>'}
 function renderDays(){let m={};trades.forEach(t=>{m[t.date]=m[t.date]||{p:0,w:0,l:0};m[t.date].p+=t.pnl_usd||0;if(t.outcome==='Win')m[t.date].w++;if(t.outcome==='Loss')m[t.date].l++});let arr=Object.entries(m).map(([d,v])=>({d,...v})).sort((a,b)=>b.p-a.p).slice(0,6);document.getElementById('stats-days').innerHTML=arr.map(x=>`<div class="bkd-row"><div class="bkd-label">${x.d}</div><div class="${x.p>=0?'pos':'neg'}" style="font-weight:900">${money(x.p)}</div></div>`).join('')||'<div class="muted">No data</div>'}
-function renderCalendar(){let now=new Date(),y=now.getFullYear(),m=now.getMonth(),days=new Date(y,m+1,0).getDate(),map={};trades.forEach(t=>{let d=new Date(t.date+'T12:00');if(d.getMonth()===m&&d.getFullYear()===y)map[t.date]=(map[t.date]||0)+(t.pnl_usd||0)});document.getElementById('cal-title').textContent=now.toLocaleDateString([], {month:'long',year:'numeric'});document.getElementById('calendar-grid').innerHTML=Array.from({length:days},(_,i)=>{let date=`${y}-${String(m+1).padStart(2,'0')}-${String(i+1).padStart(2,'0')}`,p=map[date]||0;return`<div class="cal-day ${p>0?'win':p<0?'loss':''}"><b>${i+1}</b><small>${p?money(p):''}</small></div>`}).join('')}
+function renderCalendar(){
+  let now=new Date(),y=now.getFullYear(),m=now.getMonth(),days=new Date(y,m+1,0).getDate(),map={};
+  trades.forEach(t=>{
+    let ds=tradeDate(t);
+    if(!ds)return;
+    let d=new Date(ds+'T12:00');
+    if(d.getMonth()===m&&d.getFullYear()===y){
+      if(!map[ds])map[ds]={p:0,n:0,w:0,l:0};
+      map[ds].p+=tradePnlValue(t);
+      map[ds].n++;
+      if(t.outcome==='Win')map[ds].w++;
+      if(t.outcome==='Loss')map[ds].l++;
+    }
+  });
+  const title=document.getElementById('cal-title'), grid=document.getElementById('calendar-grid');
+  if(!title||!grid)return;
+  title.textContent=now.toLocaleDateString([], {month:'long',year:'numeric'});
+  grid.innerHTML=Array.from({length:days},(_,i)=>{
+    let date=`${y}-${String(m+1).padStart(2,'0')}-${String(i+1).padStart(2,'0')}`;
+    let v=map[date];
+    let p=v?v.p:0;
+    let cls=p>0?'win':p<0?'loss':'';
+    let sub=v?`${money(p)} · ${v.n} trade${v.n!==1?'s':''}`:'';
+    return `<div class="cal-day ${cls}" data-date="${date}" onclick="openCalendarDay('${date}')" title="${sub||'No trades'}"><b>${i+1}</b><small>${sub}</small></div>`;
+  }).join('');
+}
+
+function openCalendarDay(date){
+  navTo('history');
+  historyFilter='all';
+  document.querySelectorAll('.filter-chip').forEach(x=>x.classList.remove('active'));
+  const all=document.querySelector('.filter-chip');
+  if(all)all.classList.add('active');
+  renderHistory();
+  setTimeout(()=>{
+    const target=[...document.querySelectorAll('.history-day-group')].find(el=>el.dataset.date===date);
+    if(target)target.scrollIntoView({behavior:'smooth',block:'start'});
+  },60);
+}
 function renderEquity(){let el=document.getElementById('equity-svg'),rs=trades.filter(t=>t.r_result!=null).slice().reverse();if(rs.length<2){el.innerHTML='<div class="muted">Log at least 2 trades to see your curve</div>';return}let vals=[0],run=0;rs.forEach(t=>{run+=t.r_result;vals.push(run)});let max=Math.max(...vals),min=Math.min(...vals),range=max-min||1,W=900,H=230,pad=28;let sx=i=>pad+i/(vals.length-1)*(W-pad*2),sy=v=>pad+(H-pad*2)-(v-min)/range*(H-pad*2);let d='M'+sx(0)+','+sy(vals[0]);for(let i=1;i<vals.length;i++)d+=' L'+sx(i)+','+sy(vals[i]);el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" height="230"><path d="${d} L${sx(vals.length-1)},${H-pad} L${pad},${H-pad} Z" fill="${run>=0?'rgba(22,101,52,.10)':'rgba(153,27,27,.10)'}"/><path d="${d}" fill="none" stroke="${run>=0?'#166534':'#991b1b'}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;document.getElementById('equity-meta').textContent=(run>=0?'+':'')+run.toFixed(2)+'R'}
 async function loadGamma(){document.getElementById('gamma-status').textContent='Loading...';try{let r=await fetch(`/api/freeflow?type=walls&symbol=QQQ&exp=${todayStr()}`),j=await r.json();window.gammaData=j;document.getElementById('gamma-status').textContent='Live / API';updateGammaCards(j);renderGamma();document.getElementById('gamma-mini').textContent='Gamma loaded'}catch(e){document.getElementById('gamma-status').textContent='Mock / fallback';renderGamma()}}
 function fmtLevel(n){return n==null||n===''?'—':Math.round(Number(n)).toLocaleString()}
