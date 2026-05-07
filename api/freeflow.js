@@ -64,14 +64,33 @@ function contractsFromSnapshot(snapshot) {
   );
 }
 
+function cleanKey(value) {
+  return String(value || "")
+    .trim()
+    .replace(/^FREEFLOW_API_KEY\s*=\s*/i, "")
+    .replace(/^["']|["']$/g, "")
+    .trim();
+}
+
 module.exports = async function handler(req, res) {
   try {
-    const key = process.env.FREEFLOW_API_KEY;
-    if (!key || !String(key).startsWith("ff_")) {
+    const key = cleanKey(process.env.FREEFLOW_API_KEY);
+
+    if (req.query && req.query.debug === "1") {
+      return json(res, 200, {
+        ok: true,
+        keyPresent: Boolean(key),
+        keyStartsWithFf: key.startsWith("ff_"),
+        keyLength: key.length,
+        note: "This does not expose the key. If keyLength is wrong or keyStartsWithFf is false, fix Vercel env variable."
+      });
+    }
+
+    if (!key || !key.startsWith("ff_")) {
       return json(res, 500, {
         ok: false,
         error: "Missing or invalid FREEFLOW_API_KEY on the server.",
-        fix: "Add FREEFLOW_API_KEY in Vercel Environment Variables, then redeploy with build cache disabled.",
+        fix: "Add FREEFLOW_API_KEY in Vercel Environment Variables, paste only the ff_ key, then redeploy with build cache disabled.",
       });
     }
 
