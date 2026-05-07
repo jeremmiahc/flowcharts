@@ -885,6 +885,37 @@ html,body{background:linear-gradient(115deg,#fbfaf7 0%,#f5f3ee 52%,#eef0f4 100%)
 
 </head>
 <body>
+
+<script id="gamma-control-stubs">
+window.setGammaExpiration = window.setGammaExpiration || function(v){
+  window.__pendingGammaExpiration = String(v);
+  setTimeout(function(){
+    try{
+      var el=document.getElementById('gamma-expiration');
+      if(el && el.value!==String(v)) el.value=String(v);
+      if(typeof window.loadGamma === 'function') window.loadGamma();
+      else if(typeof window.renderGamma === 'function') window.renderGamma();
+    }catch(e){
+      if(typeof window.showError==='function') window.showError('Gamma Expiration Error', e.message || String(e));
+      else console.error(e);
+    }
+  },0);
+};
+window.setGammaColorMode = window.setGammaColorMode || function(v){
+  window.__pendingGammaColorMode = String(v);
+  setTimeout(function(){
+    try{
+      var el=document.getElementById('gamma-color-mode');
+      if(el && el.value!==String(v)) el.value=String(v);
+      if(typeof window.renderGamma === 'function') window.renderGamma();
+    }catch(e){
+      if(typeof window.showError==='function') window.showError('Gamma Color Error', e.message || String(e));
+      else console.error(e);
+    }
+  },0);
+};
+</script>
+
 <div id="error-stack" aria-live="polite"></div>
 <div class="api-status-dock" id="api-status-dock">
   <div class="api-dot-item"><i class="api-dot" id="dot-supabase"></i><span>Supabase</span></div>
@@ -1842,6 +1873,27 @@ function renderGamma(){
     }
   }catch(e){console.error(e);if(typeof showError==='function')showError('Gamma Render Error',e.message)}
 }
+
+function setGammaExpiration(v){
+  try{
+    const el=document.getElementById('gamma-expiration');
+    if(el && el.value !== String(v)) el.value=String(v);
+    window.__pendingGammaExpiration=String(v);
+    if(typeof loadGamma==='function') loadGamma();
+    else if(typeof renderGamma==='function') renderGamma();
+  }catch(e){ if(typeof showError==='function') showError('Gamma Expiration Error', e.message||String(e)); }
+}
+function setGammaColorMode(v){
+  try{
+    const el=document.getElementById('gamma-color-mode');
+    if(el && el.value !== String(v)) el.value=String(v);
+    window.__pendingGammaColorMode=String(v);
+    if(typeof renderGamma==='function') renderGamma();
+  }catch(e){ if(typeof showError==='function') showError('Gamma Color Error', e.message||String(e)); }
+}
+window.setGammaExpiration=setGammaExpiration;
+window.setGammaColorMode=setGammaColorMode;
+
 async function loadGamma(){
   const status=document.getElementById('gamma-status');
   const strip=document.getElementById('gamma-status-strip');
@@ -1857,7 +1909,6 @@ async function loadGamma(){
       `/api/freeflow?endpoint=snapshot&symbol=QQQ&dte=${encodeURIComponent(dte)}`,
       `/api/freeflow?type=walls&symbol=QQQ&dte=${encodeURIComponent(dte)}`,
       `/api/freeflow?endpoint=walls&symbol=QQQ&dte=${encodeURIComponent(dte)}`,
-      `/api/freeflow`
     ];
     let best=null,lastErr=null,bestCount=-1;
     for(const url of urls){
@@ -1883,8 +1934,8 @@ async function loadGamma(){
     window.gammaData=window.gammaData||mockGammaData();
     if(typeof setApiDot==='function')setApiDot('freeflow','err');
     if(status)status.textContent='API error / fallback';
-    if(strip)strip.textContent='Status: API error · Showing fallback wall zones until FreeFlow connects';
-    if(typeof showError==='function')showError('Gamma API Error',e.message||'FreeFlow data could not load.');
+    if(strip)strip.textContent='Status: API error · Check Settings API test · Showing fallback zones';
+    // Do not spam popups every refresh; settings still logs API status and chart shows fallback.
     updateGammaCards(window.gammaData);
     renderGamma();
   }
@@ -2089,6 +2140,8 @@ async function init(){
     showError('Startup Error',e.message||'App failed to start.');
   }
 } init();
+window.setGammaExpiration=setGammaExpiration;
+window.setGammaColorMode=setGammaColorMode;
 </script>
 
 
