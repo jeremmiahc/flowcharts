@@ -493,7 +493,7 @@ html,body{background:linear-gradient(115deg,#fbfaf7 0%,#f5f3ee 52%,#eef0f4 100%)
 </style>
 
 
-<style id="gamma-3d-terrain-impl-ui">
+<style id="gamma-2d-map-impl-ui">
 .gamma-map,.gamma-map.height-standard{
   height:650px!important;
   min-height:650px!important;
@@ -510,7 +510,7 @@ html,body{background:linear-gradient(115deg,#fbfaf7 0%,#f5f3ee 52%,#eef0f4 100%)
 </style>
 
 
-<style id="gamma-3d-axis-fix-ui">
+<style id="gamma-2d-axis-fix-ui">
 .gamma-map,.gamma-map.height-standard{height:650px!important;min-height:650px!important}
 .gamma-map-wrap{min-height:650px!important;background:#fbfaf7!important}
 .gamma-legend-manual{display:none!important}
@@ -720,8 +720,61 @@ html,body{background:linear-gradient(115deg,#fbfaf7 0%,#f5f3ee 52%,#eef0f4 100%)
 .cal-day small{font-size:10px;line-height:1.25}
 </style>
 
+
+<style id="global-error-popup-ui">
+#error-stack{
+  position:fixed;
+  top:18px;
+  left:18px;
+  z-index:5000;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  width:min(390px,calc(100vw - 36px));
+  pointer-events:none;
+}
+.error-pop{
+  pointer-events:auto;
+  background:rgba(255,255,255,.96);
+  border:1px solid rgba(153,27,27,.22);
+  border-left:5px solid #991b1b;
+  border-radius:16px;
+  box-shadow:0 18px 55px rgba(26,24,18,.16);
+  padding:13px 14px;
+  color:#1a1814;
+  backdrop-filter:blur(18px);
+  animation:errorIn .18s ease both;
+}
+.error-pop strong{
+  display:block;
+  color:#991b1b;
+  font-size:13px;
+  margin-bottom:4px;
+}
+.error-pop span{
+  display:block;
+  color:#6b6560;
+  font-size:12px;
+  line-height:1.35;
+  font-weight:700;
+}
+.error-pop button{
+  margin-top:8px;
+  border:0;
+  border-radius:999px;
+  background:#991b1b;
+  color:#fff;
+  font-size:11px;
+  font-weight:900;
+  padding:6px 10px;
+  cursor:pointer;
+}
+@keyframes errorIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+</style>
+
 </head>
 <body>
+<div id="error-stack" aria-live="polite"></div>
 <div class="app">
   <header class="topbar">
     <div><div class="brand-kicker" id="top-date">EdgeFlow</div><div class="page-title" id="page-title">Today's Session</div></div>
@@ -872,13 +925,13 @@ html,body{background:linear-gradient(115deg,#fbfaf7 0%,#f5f3ee 52%,#eef0f4 100%)
         <section class="gamma-chart-card" id="gamma-chart-card">
           <div class="gamma-chart-head">
             <div>
-              <div class="eyebrow">3D Gamma Exposure Surface</div>
-              <h2>QQQ → NQ 3D Gamma Surface</h2>
-              <p>Drag to rotate · Scroll to zoom · Shift + drag to pan</p>
+              <div class="eyebrow">2D Gamma Exposure Map</div>
+              <h2>QQQ → NQ Gamma Zone Map</h2>
+              <p>2D zones · GEX bars · Call wall / put wall / gamma flip</p>
             </div>
             <div class="gamma-controls">
               <label><span>Expiration</span><select id="gamma-expiration" onchange="setGammaExpiration(this.value)">
-                <option value="0">0DTE</option><option value="1">1DTE</option><option value="2">2DTE</option><option value="3">3DTE</option>
+                <option value="0">0DTE</option><option value="1">1DTE</option><option value="2">2DTE</option><option value="3">2DTE</option>
                 <option value="5">5DTE</option><option value="7">7DTE</option><option value="14">14DTE</option>
               </select></label>
               
@@ -888,9 +941,8 @@ html,body{background:linear-gradient(115deg,#fbfaf7 0%,#f5f3ee 52%,#eef0f4 100%)
                 <option value="heatmap">Heatmap</option><option value="contrast">Contrast</option><option value="iceberg">Iceberg</option>
                 <option value="liquidity">Liquidity</option><option value="mono">Monochrome Pro</option>
               </select></label>
-          <label class="chart-type-field"><span>Chart</span><select id="gamma-chart-type" onchange="setGammaChartType(this.value)">
-            <option value="surface">3D Surface</option>
-            <option value="bars">Flat GEX by Strike</option>
+          <label class="chart-type-field"><span>Chart</span><select id="gamma-chart-type" onchange="setGammaChartType('bars')">
+            <option value="bars">2D GEX by Strike</option>
           </select></label>
               <button class="control-btn primary" id="gamma-reload-btn" onclick="loadGamma()">Reload</button>
               
@@ -988,16 +1040,31 @@ const SUPA_URL='https://najvjcciafmorqxsuhfi.supabase.co';
 const SUPA_KEY='sb_publishable_1OtFJtxKDVhheE8QBza74w_PhezqzWH';
 const FREEFLOW_KEY='ff_Ys_KBZCY2cEwx7fV6KQcriRjRhyvfvLMNitL0_dh8WU';
 let trades=[],settings={},ssFiles=[],ssFilesOf=[],ssFilesBm=[],audioTracks=[],historyFilter='all',currentPage='today',camera={eye:{x:1.52,y:1.18,z:.82},center:{x:0,y:0,z:0}};
+function showError(title,msg){
+  try{
+    const stack=document.getElementById('error-stack');
+    if(!stack)return;
+    const box=document.createElement('div');
+    box.className='error-pop';
+    box.innerHTML=`<strong>${title||'Error'}</strong><span>${String(msg||'Something went wrong.').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</span><button type="button">Dismiss</button>`;
+    box.querySelector('button').onclick=()=>box.remove();
+    stack.prepend(box);
+    setTimeout(()=>box.remove(),9000);
+  }catch(e){console.error(e)}
+}
+window.addEventListener('error',e=>showError('App Error',e.message||'A page error occurred.'));
+window.addEventListener('unhandledrejection',e=>showError('Async Error',e.reason?.message||String(e.reason||'A request failed.')));
+
 function todayStr(){return new Date().toISOString().split('T')[0]} function money(n){n=Number(n||0);return (n>=0?'+$':'-$')+Math.abs(n).toLocaleString()}
 function tradeDate(t){return String(t?.date||t?.trade_date||t?.created_at||'').slice(0,10)}
 function tradePnlValue(t){return Number(t?.pnl_usd ?? t?.pnl ?? t?.profit_loss ?? t?.net_pnl ?? 0)||0}
-function refreshCalendarNow(){try{renderStats();renderCalendar()}catch(e){console.warn('Calendar refresh skipped',e)}} function toast(m,t){let e=document.getElementById('toast');e.textContent=m;e.className='toast '+(t||'')+' show';clearTimeout(window._toast);window._toast=setTimeout(()=>e.classList.remove('show'),2800)}
+function refreshCalendarNow(){try{renderStats();renderCalendar()}catch(e){console.warn('Calendar refresh skipped',e);showError('Calendar Error',e.message)}} function toast(m,t){let e=document.getElementById('toast');if(e){e.textContent=m;e.className='toast '+(t||'')+' show';clearTimeout(window._toast);window._toast=setTimeout(()=>e.classList.remove('show'),2800)}if(t==='red')showError('Action Error',m)}
 async function sbSelect(table,order='created_at.desc'){let r=await fetch(SUPA_URL+'/rest/v1/'+table+'?select=*&order='+order,{headers:{apikey:SUPA_KEY,Authorization:'Bearer '+SUPA_KEY}});if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}
 async function sbInsert(table,row){let r=await fetch(SUPA_URL+'/rest/v1/'+table,{method:'POST',headers:{apikey:SUPA_KEY,Authorization:'Bearer '+SUPA_KEY,'Content-Type':'application/json',Prefer:'return=representation'},body:JSON.stringify(row)});if(!r.ok)throw new Error(await r.text());return r.json()}
 async function sbUpdate(table,id,row){let r=await fetch(SUPA_URL+'/rest/v1/'+table+'?id=eq.'+id,{method:'PATCH',headers:{apikey:SUPA_KEY,Authorization:'Bearer '+SUPA_KEY,'Content-Type':'application/json',Prefer:'return=representation'},body:JSON.stringify(row)});if(!r.ok)throw new Error(await r.text());return r.json()}
 async function sbDelete(table,id){let r=await fetch(SUPA_URL+'/rest/v1/'+table+'?id=eq.'+id,{method:'DELETE',headers:{apikey:SUPA_KEY,Authorization:'Bearer '+SUPA_KEY}});if(!r.ok)throw new Error('HTTP '+r.status)}
 function normalizeScreenshots(t){let s=t.screenshot_urls||[];if(typeof s==='string'&&s[0]==='{')s=s.slice(1,-1).split(',').map(u=>u.replace(/^"|"$/g,''));else if(typeof s==='string'){try{s=JSON.parse(s)}catch{s=[]}}t.screenshot_urls=(Array.isArray(s)?s:[]).filter(Boolean).map(u=>String(u).startsWith('http')?String(u).replace('/storage/v1/object/screenshots/','/storage/v1/object/public/screenshots/'):SUPA_URL+'/storage/v1/object/public/screenshots/'+String(u).replace(/^\\/,'')).filter(Boolean);return t}
-async function loadTrades(){setConn('loading','Fetching trades...');try{trades=(await sbSelect('trades')).map(normalizeScreenshots);setConn('ok','Connected · '+trades.length+' trades');try{renderAll()}catch(renderErr){console.error(renderErr);toast('Render error: '+renderErr.message,'red')}}catch(e){setConn('err',e.message);try{trades=JSON.parse(localStorage.getItem('nq_local_trades')||'[]')}catch{trades=[]}try{renderAll()}catch(renderErr){console.error(renderErr);toast('Render error: '+renderErr.message,'red')}}}
+async function loadTrades(){setConn('loading','Fetching trades...');try{trades=(await sbSelect('trades')).map(normalizeScreenshots);setConn('ok','Connected · '+trades.length+' trades');try{renderAll()}catch(renderErr){console.error(renderErr);showError('Render Error',renderErr.message);toast('Render error: '+renderErr.message,'red')}}catch(e){setConn('err',e.message);showError('Supabase Connection Error',e.message);try{trades=JSON.parse(localStorage.getItem('nq_local_trades')||'[]')}catch{trades=[]}try{renderAll()}catch(renderErr){console.error(renderErr);showError('Render Error',renderErr.message);toast('Render error: '+renderErr.message,'red')}}}
 function setConn(state,msg){let b=document.getElementById('db-badge');b.className='status-badge '+(state==='ok'?'ok':state==='err'?'err':'warn');b.textContent=(state==='err'?'Supabase error':msg);let d=document.getElementById('conn-detail');if(d)d.textContent=msg}
 function navTo(p){document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.getElementById('page-'+p).classList.add('active');document.querySelectorAll('.tab-item').forEach(x=>x.classList.remove('active'));document.getElementById('tab-'+p).classList.add('active');currentPage=p;document.getElementById('page-title').textContent={today:"Today's Session",history:"Trade History",log:"Log a Trade",gamma:"Gamma Lens",stats:"Statistics",more:"Settings"}[p];if(p==='stats')renderStats();if(p==='today')renderToday();if(p==='history')renderHistory();if(p==='gamma')setTimeout(renderGamma,80);if(p==='more'){applySettings();loadAudioSettings()}}
 function sessTimes(){let toMin=t=>{let p=(t||'00:00').split(':');return +p[0]*60+(+p[1]||0)};return{prime:toMin(settings.primeSt||'06:45'),good:toMin(settings.goodSt||'07:45'),end:toMin(settings.endSt||'10:30')}}
@@ -1196,7 +1263,7 @@ function setupScreenshotDropzones(){
 }
 
 async function uploadScreenshots(){let groups=[{files:ssFilesOf,tag:'of'},{files:ssFilesBm,tag:'bm'},{files:ssFiles,tag:'other'}],urls=[];for(let g of groups){for(let file of g.files.filter(Boolean)){let ext=file.name.split('.').pop()||'jpg',path='trade-'+g.tag+'-'+Date.now()+'-'+Math.random().toString(36).slice(2,7)+'.'+ext;try{let r=await fetch(SUPA_URL+'/storage/v1/object/screenshots/'+path,{method:'POST',headers:{apikey:SUPA_KEY,Authorization:'Bearer '+SUPA_KEY,'Content-Type':file.type||'image/jpeg','x-upsert':'true'},body:file});if(r.ok)urls.push(SUPA_URL+'/storage/v1/object/public/screenshots/'+path)}catch(e){}}}return urls}
-async function saveTrade(){let btn=document.getElementById('save-btn'),editId=btn.dataset.editId||'',date=document.getElementById('f-date').value,direction=getToggle('direction'),outcome=getToggle('outcome'),why=document.getElementById('f-why').value.trim();if(!date||!direction||!outcome){toast('Date, direction, and outcome required','red');return}if(!why){toast('Please explain why you took this trade','red');return}btn.disabled=true;btn.textContent='Saving...';try{let time=document.getElementById('f-time').value,shots=await uploadScreenshots(),trade={date,direction,outcome,notes:(document.getElementById('f-notes').value||'')+(time?'\nTime: '+time:''),session:getSessionLabel(time),confluences:getSelectedConfs(),instrument:'NQ',r_result:parseFloat(document.getElementById('f-r').value)||null,pnl_usd:parseFloat(document.getElementById('f-pnl').value)||null,emotion:getToggle('emotion'),why_taken:why,setup_num:getToggle('setup'),played_out:getToggle('played_out'),poi_type:getToggle('poi_type'),screenshot_urls:shots};let saved=editId?await sbUpdate('trades',editId,trade):await sbInsert('trades',trade);if(outcome==='Win')playWinSound();clearForm();await loadTrades();refreshCalendarNow();navTo(editId?'history':'today');toast('Trade saved · calendar updated','green')}catch(e){toast('Save failed: '+e.message,'red')}btn.disabled=false;btn.textContent='Save Trade'}
+async function saveTrade(){let btn=document.getElementById('save-btn'),editId=btn.dataset.editId||'',date=document.getElementById('f-date').value,direction=getToggle('direction'),outcome=getToggle('outcome'),why=document.getElementById('f-why').value.trim();if(!date||!direction||!outcome){toast('Date, direction, and outcome required','red');return}if(!why){toast('Please explain why you took this trade','red');return}btn.disabled=true;btn.textContent='Saving...';try{let time=document.getElementById('f-time').value,shots=await uploadScreenshots(),trade={date,direction,outcome,notes:(document.getElementById('f-notes').value||'')+(time?'\nTime: '+time:''),session:getSessionLabel(time),confluences:getSelectedConfs(),instrument:'NQ',r_result:parseFloat(document.getElementById('f-r').value)||null,pnl_usd:parseFloat(document.getElementById('f-pnl').value)||null,emotion:getToggle('emotion'),why_taken:why,setup_num:getToggle('setup'),played_out:getToggle('played_out'),poi_type:getToggle('poi_type'),screenshot_urls:shots};let saved=editId?await sbUpdate('trades',editId,trade):await sbInsert('trades',trade);if(outcome==='Win')playWinSound();clearForm();await loadTrades().catch(e=>showError('Startup Error',e.message));refreshCalendarNow();navTo(editId?'history':'today');toast('Trade saved · calendar updated','green')}catch(e){showError('Save Failed',e.message);toast('Save failed: '+e.message,'red')}btn.disabled=false;btn.textContent='Save Trade'}
 function clearForm(){['f-date','f-time','f-r','f-pnl','f-why','f-notes'].forEach(id=>{let e=document.getElementById(id);if(e)e.value=id==='f-date'?todayStr():id==='f-time'?new Date().toTimeString().slice(0,5):''});document.querySelectorAll('.btt').forEach(b=>b.className='btt');document.querySelectorAll('[data-core="1"]').forEach(b=>b.className='btt sel-core');['ss-previews','ss-previews-of','ss-previews-bm'].forEach(id=>document.getElementById(id).innerHTML='');ssFiles=[];ssFilesOf=[];ssFilesBm=[];document.getElementById('cancel-edit-btn').style.display='none';document.getElementById('save-btn').dataset.editId='';updateFormSession()}
 function cancelEdit(){clearForm();navTo('history')} function updateFormSession(){let e=document.getElementById('form-session');if(e)e.textContent=getSessionLabel(document.getElementById('f-time').value)||'—'} document.addEventListener('input',e=>{if(e.target.id==='f-time')updateFormSession()})
 function openModal(id){let t=trades.find(x=>x.id==id);if(!t)return;document.getElementById('modal-title').textContent=(t.direction||'Trade')+' · '+(t.outcome||'');let shots=t.screenshot_urls||[];document.getElementById('modal-body').innerHTML=`<div class="grid grid-3"><div class="card"><div class="card-label">P&L</div><div class="level-val ${Number(t.pnl_usd)>=0?'pos':'neg'}">${t.pnl_usd!=null?money(t.pnl_usd):'—'}</div></div><div class="card"><div class="card-label">R</div><div class="level-val">${t.r_result??'—'}</div></div><div class="card"><div class="card-label">Session</div><div class="level-val">${t.session||'—'}</div></div></div><div class="modal-section"><div class="card-label">Why</div><p style="line-height:1.7">${t.why_taken||'—'}</p></div><div class="modal-section"><div class="card-label">Notes</div><p style="white-space:pre-wrap;line-height:1.7">${t.notes||'—'}</p></div><div class="modal-section"><div class="card-label">Screenshots</div><div class="grid grid-2">${shots.length?shots.map(u=>`<img src="${u}" style="width:100%;border-radius:14px;cursor:zoom-in" onclick="openLightbox('${u}')">`).join(''):'<span class="muted">No screenshots</span>'}</div></div>`;document.getElementById('modal-del').onclick=()=>deleteTrade(id);document.getElementById('modal-edit').onclick=()=>editTrade(id);document.getElementById('modal').classList.add('open')}
@@ -1248,7 +1315,7 @@ function openCalendarDay(date){
   },60);
 }
 function renderEquity(){let el=document.getElementById('equity-svg'),rs=trades.filter(t=>t.r_result!=null).slice().reverse();if(rs.length<2){el.innerHTML='<div class="muted">Log at least 2 trades to see your curve</div>';return}let vals=[0],run=0;rs.forEach(t=>{run+=t.r_result;vals.push(run)});let max=Math.max(...vals),min=Math.min(...vals),range=max-min||1,W=900,H=230,pad=28;let sx=i=>pad+i/(vals.length-1)*(W-pad*2),sy=v=>pad+(H-pad*2)-(v-min)/range*(H-pad*2);let d='M'+sx(0)+','+sy(vals[0]);for(let i=1;i<vals.length;i++)d+=' L'+sx(i)+','+sy(vals[i]);el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" height="230"><path d="${d} L${sx(vals.length-1)},${H-pad} L${pad},${H-pad} Z" fill="${run>=0?'rgba(22,101,52,.10)':'rgba(153,27,27,.10)'}"/><path d="${d}" fill="none" stroke="${run>=0?'#166534':'#991b1b'}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;document.getElementById('equity-meta').textContent=(run>=0?'+':'')+run.toFixed(2)+'R'}
-async function loadGamma(){document.getElementById('gamma-status').textContent='Loading...';try{let r=await fetch(`/api/freeflow?type=walls&symbol=QQQ&exp=${todayStr()}`),j=await r.json();window.gammaData=j;document.getElementById('gamma-status').textContent='Live / API';updateGammaCards(j);renderGamma();document.getElementById('gamma-mini').textContent='Gamma loaded'}catch(e){document.getElementById('gamma-status').textContent='Mock / fallback';renderGamma()}}
+async function loadGamma(){document.getElementById('gamma-status').textContent='Loading...';try{let r=await fetch(`/api/freeflow?type=walls&symbol=QQQ&exp=${todayStr()}`);if(!r.ok)throw new Error('FreeFlow API returned HTTP '+r.status);let j=await r.json();if(j&&j.ok===false)throw new Error(j.message||'FreeFlow API returned an error');window.gammaData=j;document.getElementById('gamma-status').textContent='Live / API connected';const strip=document.getElementById('gamma-status-strip');if(strip)strip.textContent='Status: API connected · Chart: 2D GEX zones · Snapshot: live';updateGammaCards(j);renderGamma();let mini=document.getElementById('gamma-mini');if(mini)mini.textContent='Gamma loaded'}catch(e){document.getElementById('gamma-status').textContent='API error';const strip=document.getElementById('gamma-status-strip');if(strip)strip.textContent='Status: API error · Check FreeFlow key / endpoint';showError('Gamma API Error',e.message||'FreeFlow data could not load.');renderGamma()}}
 function fmtLevel(n){return n==null||n===''?'—':Math.round(Number(n)).toLocaleString()}
 function getTransferredLevels(j){
   let g=j||{};
@@ -2146,7 +2213,7 @@ async function init(){document.getElementById('f-date').value=todayStr();documen
         const ys = built.rows.map(r=>r.rawGex);
         const yAbs = Math.max(...ys.map(v=>Math.abs(v)), 1);
 
-        // TRUE FLAT 2D chart. No scene, no surface, no 3D camera.
+        // TRUE FLAT 2D chart. No scene, no surface, no 2D camera.
         window.Plotly.react("gamma-chart", built.traces, {
           autosize:true,
           height:650,
