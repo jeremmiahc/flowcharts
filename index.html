@@ -781,6 +781,15 @@ html,body{background:linear-gradient(115deg,#fbfaf7 0%,#f5f3ee 52%,#eef0f4 100%)
 .gamma-chart-head .eyebrow{color:var(--text3)!important}
 </style>
 
+
+<style id="click-safety-final">
+#error-stack{pointer-events:none!important}
+#error-stack .error-pop{pointer-events:auto!important}
+.modal-overlay:not(.open){display:none!important;pointer-events:none!important}
+.lightbox:not(.open){display:none!important;pointer-events:none!important}
+.win-flash{pointer-events:none!important}
+</style>
+
 </head>
 <body>
 <div id="error-stack" aria-live="polite"></div>
@@ -1344,7 +1353,7 @@ function openCalendarDay(date){
   },60);
 }
 function renderEquity(){let el=document.getElementById('equity-svg'),rs=trades.filter(t=>t.r_result!=null).slice().reverse();if(rs.length<2){el.innerHTML='<div class="muted">Log at least 2 trades to see your curve</div>';return}let vals=[0],run=0;rs.forEach(t=>{run+=t.r_result;vals.push(run)});let max=Math.max(...vals),min=Math.min(...vals),range=max-min||1,W=900,H=230,pad=28;let sx=i=>pad+i/(vals.length-1)*(W-pad*2),sy=v=>pad+(H-pad*2)-(v-min)/range*(H-pad*2);let d='M'+sx(0)+','+sy(vals[0]);for(let i=1;i<vals.length;i++)d+=' L'+sx(i)+','+sy(vals[i]);el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" height="230"><path d="${d} L${sx(vals.length-1)},${H-pad} L${pad},${H-pad} Z" fill="${run>=0?'rgba(22,101,52,.10)':'rgba(153,27,27,.10)'}"/><path d="${d}" fill="none" stroke="${run>=0?'#166534':'#991b1b'}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;document.getElementById('equity-meta').textContent=(run>=0?'+':'')+run.toFixed(2)+'R'}
-async async function loadGamma(){
+async function loadGamma(){
   const status=document.getElementById('gamma-status');
   const strip=document.getElementById('gamma-status-strip');
   if(status) status.textContent='Loading...';
@@ -1777,7 +1786,7 @@ async function init(){
   const SOURCE_SYMBOL = "QQQ";
   const NQ_QUOTE_SYMBOL = "NQ=F";
 
-  window.gammaSettings = { exp:"0", colorMode:"classic" };
+  window.gammaSettings = { exp:"0", colorMode:"classic", chartType:"bars" };
   window.gammaAccurateState = { model:null, raw:null, loading:false, error:null, chartError:null, requestUrls:{}, lastSuccess:null, requestId:0 };
 
   const $ = id => document.getElementById(id);
@@ -2522,7 +2531,7 @@ async function init(){
   window.setGammaExpiration = function(v){ window.gammaSettings.exp = String(v); loadGammaData(); };
   window.setGammaColorMode = function(v){ window.gammaSettings.colorMode = v; renderGamma(); };
   window.setGammaChartType = function(v){
-    window.gammaSettings.chartType = v || "surface";
+    window.gammaSettings.chartType = "bars";
     const s = document.getElementById("gamma-chart-type");
     if(s && s.value !== window.gammaSettings.chartType) s.value = window.gammaSettings.chartType;
     renderGamma();
@@ -2537,6 +2546,4 @@ async function init(){
 </script>
 
 </body>
-</html
-
->
+</html>
