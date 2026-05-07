@@ -874,6 +874,15 @@ html,body{background:linear-gradient(115deg,#fbfaf7 0%,#f5f3ee 52%,#eef0f4 100%)
 .gamma-status-strip{font-weight:900!important;color:#6b6560!important}
 </style>
 
+
+<style id="full-gamma-map-css">
+#gamma-chart{background:#fbfaf7!important;min-height:660px!important;height:auto!important;display:block!important}
+.svg-gex-chart{width:100%;display:block}
+.gamma-map-wrap{min-height:660px!important;background:linear-gradient(180deg,#fff,#fbfaf7)!important;overflow:visible!important}
+.gamma-chart-card{overflow:visible!important}
+.gamma-status-strip{font-weight:900!important;color:#6b6560!important}
+</style>
+
 </head>
 <body>
 <div id="error-stack" aria-live="polite"></div>
@@ -1590,7 +1599,23 @@ function mockGammaData(){
     })
   }
 }
-function getContracts(g){return g?.contracts || g?.strikes || g?.snapshot?.contracts || g?.data?.contracts || g?.rows || []}
+function getContracts(g){
+  const candidates=[
+    g?.contracts,
+    g?.strikes,
+    g?.rows,
+    g?.data,
+    g?.snapshot?.contracts,
+    g?.snapshot?.strikes,
+    g?.snapshot?.data,
+    g?.result?.contracts,
+    g?.result?.strikes
+  ];
+  for(const c of candidates){
+    if(Array.isArray(c) && c.length) return c;
+  }
+  return [];
+}
 function getTransferredLevels(j){
   const g=j||{};
   const qqqSpot=asNum(g.qqqSpot ?? g.qqq_spot ?? g.spot ?? g.underlying_price ?? g.snapshot?.spot) || 674.18;
@@ -1652,24 +1677,66 @@ function updateGammaRead(){
 }
 function gammaRows(g,lv){
   const rows=[];
-  getContracts(g).forEach(c=>{
+  const contracts=getContracts(g);
+  contracts.forEach(c=>{
     let q=asNum(c.strike ?? c.qqqStrike ?? c.rawStrike ?? c.qqqLevel);
     let level=asNum(c.nqLevel ?? c.level ?? c.nq_price ?? c.nqPrice);
     if(level==null && q!=null) level = q<1000 ? q*lv.ratio : q;
     if(level==null) return;
     if(!(Number.isFinite(level) && level>10000 && level<50000)) return;
+
     let gex=asNum(c.gex ?? c.gamma_exposure ?? c.exposure);
-    if(gex==null || Math.abs(gex)<1) gex=(asNum(c.gamma)||0)*(asNum(c.oi)||0)*1000000;
-    rows.push({level,gex:gex||0,oi:asNum(c.oi)||0,dex:asNum(c.dex)||0});
+    if(gex==null || Math.abs(gex)<1){
+      const gamma=asNum(c.gamma)||0;
+      const oi=asNum(c.oi ?? c.open_interest)||0;
+      gex=gamma*oi*1000000;
+    }
+    rows.push({
+      level,
+      rawStrike:q,
+      right:c.right ?? c.type ?? c.option_type ?? '',
+      gex:gex||0,
+      oi:asNum(c.oi ?? c.open_interest)||0,
+      dex:asNum(c.dex)||0,
+      gamma:asNum(c.gamma)||0
+    });
   });
-  if(!rows.some(r=>Math.abs(r.gex)>0)){
-    const net=asNum(g.net_gex ?? g.netGex ?? g.total_gex ?? g.totalGex)||500000000;
-    rows.push({level:lv.call,gex:Math.abs(net*.70),oi:0,dex:0},{level:lv.flip,gex:(net>=0?1:-1)*Math.abs(net*.35),oi:0,dex:0},{level:lv.put,gex:-Math.abs(net*.55),oi:0,dex:0});
-  }
-  const bucket=25,m=new Map();
-  rows.forEach(r=>{const k=Math.round(r.level/bucket)*bucket;const b=m.get(k)||{level:k,gex:0,oi:0,dex:0,count:0};b.gex+=r.gex;b.oi+=r.oi;b.dex+=r.dex;b.count++;m.set(k,b)});
+
+  // If snapshot rows exist, preserve the full strike ladder. Use small buckets only to merge calls/puts at same NQ zone.
+  const bucket=10, m=new Map();
+  rows.forEach(r=>{
+    const k=Math.round(r.level/bucket)*bucket;
+    const b=m.get(k)||{level:k,gex:0,oi:0,dex:0,gamma:0,count:0,raw:[]};
+    b.gex+=r.gex;
+    b.oi+=r.oi;
+    b.dex+=r.dex;
+    b.gamma+=r.gamma;
+    b.count++;
+    if(r.rawStrike!=null) b.raw.push(r.rawStrike);
+    m.set(k,b);
+  });
+
   let out=[...m.values()].sort((a,b)=>a.level-b.level);
-  if(out.length>48) out=out.sort((a,b)=>Math.abs(b.gex)-Math.abs(a.gex)).slice(0,48).sort((a,b)=>a.level-b.level);
+
+  // Only if there is no snapshot/strike data, build visible wall-zone fallback bars.
+  if(!out.length || !out.some(r=>Math.abs(r.gex)>0)){
+    const net=asNum(g.net_gex ?? g.netGex ?? g.total_gex ?? g.totalGex)||500000000;
+    out=[
+      {level:lv.call,gex:Math.abs(net*.70),oi:0,dex:0,gamma:0,count:1,raw:[]},
+      {level:lv.flip,gex:(net>=0?1:-1)*Math.abs(net*.35),oi:0,dex:0,gamma:0,count:1,raw:[]},
+      {level:lv.put,gex:-Math.abs(net*.55),oi:0,dex:0,gamma:0,count:1,raw:[]}
+    ].sort((a,b)=>a.level-b.level);
+  }
+
+  // Show everything practical. If there are too many strikes, keep every visible ladder row near spot and walls.
+  if(out.length>140){
+    const important=[lv.spot,lv.call,lv.put,lv.flip];
+    out=out
+      .map(r=>({...r,score:Math.min(...important.map(x=>Math.abs(r.level-x))) - Math.abs(r.gex)/(Math.max(...out.map(x=>Math.abs(x.gex)),1))*100}))
+      .sort((a,b)=>a.score-b.score)
+      .slice(0,140)
+      .sort((a,b)=>a.level-b.level);
+  }
   return out;
 }
 function renderGamma(){
@@ -1685,26 +1752,28 @@ function renderGamma(){
     const levels=[lv.spot,lv.call,lv.put,lv.flip,...rows.map(r=>r.level)]
       .filter(v=>Number.isFinite(v) && v>10000 && v<50000);
 
-    const min=Math.min(...levels)-150;
-    const max=Math.max(...levels)+150;
+    const min=Math.min(...levels)-100;
+    const max=Math.max(...levels)+100;
     let maxAbs=Math.max(...rows.map(r=>Math.abs(r.gex)),1);
     if(maxAbs<100)maxAbs=100;
 
-    const W=1100,H=650,ml=112,mr=190,mt=36,mb=72;
-    const plotW=W-ml-mr,plotH=H-mt-mb,x0=ml+plotW/2;
-    const xScale=v=>x0+(v/(maxAbs*1.20))*(plotW/2);
+    const W=1120;
+    const dynamicH=Math.max(660, Math.min(1250, 230 + rows.length*12));
+    const H=dynamicH, ml=112, mr=205, mt=42, mb=78;
+    const plotW=W-ml-mr, plotH=H-mt-mb, x0=ml+plotW/2;
+    const xScale=v=>x0+(v/(maxAbs*1.18))*(plotW/2);
     const yScale=v=>mt+(max-v)/(max-min)*plotH;
-    const barH=Math.max(7,Math.min(18,plotH/Math.max(rows.length,1)*.58));
-    const gridY=Array.from({length:8},(_,i)=>min+(max-min)*i/7);
+    const barH=Math.max(4.5, Math.min(13, plotH/Math.max(rows.length,1)*.68));
+    const gridY=Array.from({length:Math.min(12,Math.max(7,Math.round(plotH/95)))},(_,i)=>min+(max-min)*i/(Math.min(12,Math.max(7,Math.round(plotH/95)))-1));
     const gridX=[-maxAbs,-maxAbs*.5,0,maxAbs*.5,maxAbs];
 
     const zone=(v,label,color,solid=false)=>{
       if(!Number.isFinite(v))return'';
       const y=yScale(v), y1=yScale(v+15), y2=yScale(v-15);
       return `<g>
-        <rect x="${ml}" y="${y1}" width="${plotW}" height="${Math.max(2,y2-y1)}" rx="8" fill="${color}" opacity=".065"/>
-        <line x1="${ml}" x2="${ml+plotW}" y1="${y}" y2="${y}" stroke="${color}" stroke-width="2.4" ${solid?'':'stroke-dasharray="8 8"'}/>
-        <rect x="${ml+plotW+10}" y="${y-16}" width="165" height="32" rx="12" fill="rgba(255,255,255,.96)" stroke="${color}" stroke-width="1.4"/>
+        <rect x="${ml}" y="${y1}" width="${plotW}" height="${Math.max(2,y2-y1)}" rx="8" fill="${color}" opacity=".055"/>
+        <line x1="${ml}" x2="${ml+plotW}" y1="${y}" y2="${y}" stroke="${color}" stroke-width="2.25" ${solid?'':'stroke-dasharray="8 8"'}/>
+        <rect x="${ml+plotW+10}" y="${y-15}" width="178" height="30" rx="12" fill="rgba(255,255,255,.96)" stroke="${color}" stroke-width="1.3"/>
         <text x="${ml+plotW+22}" y="${y+5}" font-size="12" font-weight="900" fill="${color}">${label} ${fmtLevel(v)}</text>
       </g>`;
     };
@@ -1713,112 +1782,112 @@ function renderGamma(){
       .filter(r=>Number.isFinite(r.level) && r.level>min && r.level<max)
       .map(r=>{
         let v=r.gex||0;
-        if(v===0)v=maxAbs*.04;
-        if(Math.abs(v)<maxAbs*.055)v=Math.sign(v||1)*maxAbs*.055;
+        if(v===0)v=maxAbs*.025;
+        if(Math.abs(v)<maxAbs*.025)v=Math.sign(v||1)*maxAbs*.025;
         const y=yScale(r.level)-barH/2;
         const x=v>=0?x0:xScale(v);
-        const w=Math.max(Math.abs(xScale(v)-x0),4);
-        const color=r.gex>=0?'rgba(15,143,107,.84)':'rgba(216,76,59,.84)';
+        const w=Math.max(Math.abs(xScale(v)-x0),3);
+        const color=r.gex>=0?'rgba(15,143,107,.78)':'rgba(216,76,59,.78)';
         const stroke=r.gex>=0?'rgba(15,143,107,1)':'rgba(185,28,28,1)';
         return `<g>
-          <title>NQ Zone: ${fmtLevel(r.level)}\nGEX: ${compactNum(r.gex)}\nDEX: ${compactNum(r.dex)}\nOI: ${fmtLevel(r.oi)}\nRows: ${r.count}</title>
-          <rect x="${x}" y="${y}" width="${w}" height="${barH}" rx="6" fill="${color}" stroke="${stroke}" stroke-opacity=".35"/>
+          <title>NQ Zone: ${fmtLevel(r.level)}\nGEX: ${compactNum(r.gex)}\nDEX: ${compactNum(r.dex)}\nOI: ${fmtLevel(r.oi)}\nRows grouped: ${r.count}</title>
+          <rect x="${x}" y="${y}" width="${w}" height="${barH}" rx="4" fill="${color}" stroke="${stroke}" stroke-opacity=".32"/>
         </g>`;
       }).join('');
 
-    el.innerHTML=`<svg class="svg-gex-chart premium-gex-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Premium 2D NQ gamma map">
+    const infoText = rows.length>3
+      ? `${rows.length} strike zones loaded`
+      : `Wall zones only · snapshot rows unavailable`;
+
+    el.style.height=H+'px';
+    const wrap=el.closest('.gamma-map-wrap'); if(wrap)wrap.style.minHeight=H+'px';
+
+    el.innerHTML=`<svg class="svg-gex-chart premium-gex-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Full 2D NQ gamma map">
       <defs>
-        <linearGradient id="chartBg" x1="0" x2="1" y1="0" y2="1">
+        <linearGradient id="chartBgFull" x1="0" x2="1" y1="0" y2="1">
           <stop offset="0%" stop-color="#ffffff"/>
           <stop offset="100%" stop-color="#fbfaf7"/>
         </linearGradient>
-        <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+        <filter id="softShadowFull" x="-20%" y="-20%" width="140%" height="140%">
           <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#1a1814" flood-opacity=".08"/>
         </filter>
       </defs>
-      <rect x="${ml}" y="${mt}" width="${plotW}" height="${plotH}" rx="22" fill="url(#chartBg)" stroke="rgba(26,24,18,.10)" filter="url(#softShadow)"/>
+      <rect x="${ml}" y="${mt}" width="${plotW}" height="${plotH}" rx="22" fill="url(#chartBgFull)" stroke="rgba(26,24,18,.10)" filter="url(#softShadowFull)"/>
       ${gridY.map(v=>`<g>
         <line x1="${ml}" x2="${ml+plotW}" y1="${yScale(v)}" y2="${yScale(v)}" stroke="rgba(71,85,105,.14)"/>
         <text x="${ml-14}" y="${yScale(v)+4}" text-anchor="end" font-size="12" font-weight="900" fill="#475569">${fmtLevel(v)}</text>
       </g>`).join('')}
       ${gridX.map(v=>`<g>
-        <line x1="${xScale(v)}" x2="${xScale(v)}" y1="${mt}" y2="${mt+plotH}" stroke="${v===0?'rgba(17,24,39,.48)':'rgba(71,85,105,.12)'}" stroke-width="${v===0?2.3:1}"/>
-        <text x="${xScale(v)}" y="${mt+plotH+30}" text-anchor="middle" font-size="12" font-weight="900" fill="#475569">${compactNum(v)}</text>
+        <line x1="${xScale(v)}" x2="${xScale(v)}" y1="${mt}" y2="${mt+plotH}" stroke="${v===0?'rgba(17,24,39,.50)':'rgba(71,85,105,.12)'}" stroke-width="${v===0?2.3:1}"/>
+        <text x="${xScale(v)}" y="${mt+plotH+32}" text-anchor="middle" font-size="12" font-weight="900" fill="#475569">${compactNum(v)}</text>
       </g>`).join('')}
       ${bars}
       ${zone(lv.spot,'NQ Spot','#facc15',true)}
       ${zone(lv.call,'Call Wall','#087a50')}
       ${zone(lv.flip,'Gamma Flip','#7c3aed')}
       ${zone(lv.put,'Put Wall','#b91c1c')}
-      <text x="${ml+plotW/2}" y="${H-18}" text-anchor="middle" font-size="14" font-weight="950" fill="#334155">GEX / Pressure</text>
+      <text x="${ml+plotW/2}" y="${H-20}" text-anchor="middle" font-size="14" font-weight="950" fill="#334155">GEX / Pressure</text>
       <text x="28" y="${mt+plotH/2}" text-anchor="middle" transform="rotate(-90 28 ${mt+plotH/2})" font-size="14" font-weight="950" fill="#334155">NQ Zones</text>
-      <g transform="translate(${ml},${mt-14})">
+      <g transform="translate(${ml},${mt-18})">
         <circle cx="0" cy="0" r="5" fill="#087a50"/><text x="12" y="4" font-size="12" font-weight="900" fill="#6b6560">+GEX</text>
         <circle cx="70" cy="0" r="5" fill="#d84c3b"/><text x="82" y="4" font-size="12" font-weight="900" fill="#6b6560">-GEX</text>
         <circle cx="140" cy="0" r="5" fill="#facc15"/><text x="152" y="4" font-size="12" font-weight="900" fill="#6b6560">NQ Spot</text>
+        <text x="235" y="4" font-size="12" font-weight="900" fill="#a8a298">${infoText}</text>
       </g>
     </svg>`;
+
+    const strip=document.getElementById('gamma-status-strip');
+    if(strip && strip.textContent.includes('API connected')){
+      strip.textContent=strip.textContent.replace(/ · Rows:.*$/,'')+` · Rows: ${rows.length}`;
+    }
   }catch(e){console.error(e);if(typeof showError==='function')showError('Gamma Render Error',e.message)}
 }
-
-
-function setGammaExpiration(v){
-  try{
-    const el=document.getElementById('gamma-expiration');
-    if(el && el.value !== String(v)) el.value=String(v);
-    if(typeof loadGamma==='function') loadGamma();
-    else if(typeof renderGamma==='function') renderGamma();
-  }catch(e){if(typeof showError==='function')showError('Gamma Expiration Error',e.message)}
-}
-function setGammaColorMode(v){
-  try{
-    const el=document.getElementById('gamma-color-mode');
-    if(el && el.value !== String(v)) el.value=String(v);
-    if(typeof renderGamma==='function') renderGamma();
-  }catch(e){if(typeof showError==='function')showError('Gamma Color Error',e.message)}
-}
-window.setGammaExpiration=setGammaExpiration;
-window.setGammaColorMode=setGammaColorMode;
-
 async function loadGamma(){
   const status=document.getElementById('gamma-status');
   const strip=document.getElementById('gamma-status-strip');
   if(status) status.textContent='Loading...';
-  if(strip) strip.textContent='Status: Loading FreeFlow API · Chart: 2D GEX zones';
+  if(strip) strip.textContent='Status: Loading FreeFlow API · Chart: full 2D GEX map';
   try{
     const expSel=document.getElementById('gamma-expiration');
     const dte=expSel ? expSel.value : '0';
     const urls=[
       `/api/freeflow?type=gamma&symbol=QQQ&dte=${encodeURIComponent(dte)}`,
+      `/api/freeflow?type=full&symbol=QQQ&dte=${encodeURIComponent(dte)}`,
       `/api/freeflow?type=snapshot&symbol=QQQ&dte=${encodeURIComponent(dte)}`,
-      `/api/freeflow?type=walls&symbol=QQQ&dte=${encodeURIComponent(dte)}`,
       `/api/freeflow?endpoint=snapshot&symbol=QQQ&dte=${encodeURIComponent(dte)}`,
-      `/api/freeflow?endpoint=walls&symbol=QQQ&dte=${encodeURIComponent(dte)}`
+      `/api/freeflow?type=walls&symbol=QQQ&dte=${encodeURIComponent(dte)}`,
+      `/api/freeflow?endpoint=walls&symbol=QQQ&dte=${encodeURIComponent(dte)}`,
+      `/api/freeflow`
     ];
-    let j=null,lastErr=null;
+    let best=null,lastErr=null,bestCount=-1;
     for(const url of urls){
       try{
         const r=await fetch(url);
         if(!r.ok)throw new Error(url+' returned HTTP '+r.status);
-        j=await r.json();
+        const j=await r.json();
         if(j&&j.ok===false)throw new Error(j.message||'FreeFlow API returned an error');
-        break;
+        const count=getContracts(j).length;
+        if(count>bestCount){best=j;bestCount=count}
+        if(count>0) break;
       }catch(e){lastErr=e}
     }
-    if(!j)throw lastErr||new Error('FreeFlow API unavailable');
-    window.gammaData=j;
+    if(!best)throw lastErr||new Error('FreeFlow API unavailable');
+    window.gammaData=best;
     if(typeof setApiDot==='function')setApiDot('freeflow','ok');
     if(status)status.textContent='Live / API connected';
-    if(strip)strip.textContent='Status: API connected · Chart: 2D GEX zones · Updated '+new Date().toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+    if(strip)strip.textContent='Status: API connected · Chart: full 2D GEX map · Updated '+new Date().toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+    updateGammaCards(best);
+    renderGamma();
   }catch(e){
     console.error(e);
     window.gammaData=window.gammaData||mockGammaData();
     if(typeof setApiDot==='function')setApiDot('freeflow','err');
     if(status)status.textContent='API error / fallback';
-    if(strip)strip.textContent='Status: API error · Showing fallback zones until FreeFlow connects';
+    if(strip)strip.textContent='Status: API error · Showing fallback wall zones until FreeFlow connects';
     if(typeof showError==='function')showError('Gamma API Error',e.message||'FreeFlow data could not load.');
+    updateGammaCards(window.gammaData);
+    renderGamma();
   }
-  try{updateGammaCards(window.gammaData||mockGammaData());renderGamma()}catch(renderErr){console.error(renderErr);showError('Gamma Render Error',renderErr.message)}
 }
 
 function loadSettings(){try{settings=JSON.parse(localStorage.getItem('nq_settings')||'{}')}catch{settings={}};applySettings()}
