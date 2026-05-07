@@ -137,9 +137,10 @@ module.exports = async function handler(req, res) {
     }
 
     // Default/full gamma payload: expirations + walls + snapshot + contracts in one response.
-    const [walls, snapshot] = await Promise.all([
+    const [walls, snapshot, chart5m] = await Promise.all([
       ff("/walls", { symbol, exp }, key),
       ff("/snapshot", { symbol, exp }, key),
+      ff("/chart", { symbol, interval: "5m" }, key).catch(() => null),
     ]);
 
     const contracts = contractsFromSnapshot(snapshot);
@@ -170,6 +171,8 @@ module.exports = async function handler(req, res) {
       contracts,
       snapshot,
       walls,
+      chart5m,
+      candles: chart5m?.candles || [],
       lastUpdated: new Date().toISOString(),
     });
   } catch (e) {

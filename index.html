@@ -1085,7 +1085,7 @@ window.setGammaColorMode = window.setGammaColorMode || function(v){
           </div>
           <div class="market-grid gamma-core-grid">
             <div class="gamma-mini"><span>Current NQ</span><strong id="gamma-nq-ref">—</strong><small>FreeFlow QQQ-based NQ estimate</small></div>
-            <div class="gamma-mini"><span>Net GEX</span><strong id="gamma-net-gex">—</strong><small>Dealer pressure</small></div>
+            <div class="gamma-mini"><span>Net GEX</span><strong id="gamma-net-gex">—</strong><small>GEX + DEX + Vanna/Charm</small></div>
             <div class="gamma-mini"><span>Reaction Bias</span><strong id="gamma-reaction-bias">—</strong><small>Chop or expansion</small></div>
             <div class="gamma-mini"><span>Closest Level</span><strong id="gamma-closest-level">—</strong><small>Nearest gamma zone</small></div>
           </div>
@@ -1702,6 +1702,71 @@ function convertQqqLevelToNq(qqqLevel, qqqSpot, nqSpot){
   if(!Number.isFinite(qqqSpot) || !Number.isFinite(nqSpot) || qqqSpot<=0) return null;
   return nqSpot + ((qqqLevel - qqqSpot) / qqqSpot) * nqSpot;
 }
+
+function freeflowCandles(g){
+  return g?.candles || g?.chart5m?.candles || g?.chart?.candles || [];
+}
+function qqqMomentum(g){
+  const candles=freeflowCandles(g);
+  if(!Array.isArray(candles) || candles.length<3) return {pct:0, direction:'flat'};
+  const last=candles[candles.length-1];
+  const prev=candles[Math.max(0,candles.length-7)];
+  const lastClose=asNum(last.close ?? last.c);
+  const prevClose=asNum(prev.close ?? prev.c);
+  if(!lastClose || !prevClose) return {pct:0,direction:'flat'};
+  const pct=(lastClose-prevClose)/prevClose;
+  return {pct, direction:pct>0.001?'up':pct<-0.001?'down':'flat'};
+}
+function contractPressure(c){
+  // Composite pressure score from FreeFlow Greeks.
+  // GEX stays primary. DEX/VEX/Vanna/Charm adjust the read, not the actual price level.
+  const gex=asNum(c.gex ?? c.gamma_exposure ?? c.exposure) || 0;
+  const dex=asNum(c.dex) || 0;
+  const vex=asNum(c.vex ?? c.vegaex) || 0;
+  const vanna=asNum(c.vanna ?? c.vannaex) || 0;
+  const charm=asNum(c.charm ?? c.charmex) || 0;
+  const oi=asNum(c.oi ?? c.open_interest) || 0;
+  const iv=asNum(c.iv_pct ?? c.iv) || 0;
+  const gamma=asNum(c.gamma) || 0;
+  const delta=asNum(c.delta) || 0;
+
+  const base = Math.abs(gex)>0 ? gex : gamma * oi * 1000000;
+  const directional = (dex * 0.08) + (vex * 0.05) + (vanna * 0.10) + (charm * 0.06);
+  const liquidityWeight = 1 + Math.min(Math.log10(Math.max(oi,1))/10, 0.55);
+  const ivWeight = 1 + Math.min(Math.abs(iv)/100, 0.35);
+  const deltaWeight = 1 + Math.min(Math.abs(delta), 0.35) * 0.25;
+  return (base + directional) * liquidityWeight * ivWeight * deltaWeight;
+}
+function deriveWallsFromRows(rows, lv){
+  if(!rows || !rows.length) return {};
+  const above=rows.filter(r=>r.level>=lv.spot).sort((a,b)=>Math.abs(b.pressure)-Math.abs(a.pressure));
+  const below=rows.filter(r=>r.level<lv.spot).sort((a,b)=>Math.abs(b.pressure)-Math.abs(a.pressure));
+  const pos=rows.filter(r=>r.pressure>0).sort((a,b)=>b.pressure-a.pressure);
+  const neg=rows.filter(r=>r.pressure<0).sort((a,b)=>Math.abs(b.pressure)-Math.abs(a.pressure));
+  return {
+    derivedCall: above[0]?.level ?? pos[0]?.level,
+    derivedPut: below[0]?.level ?? neg[0]?.level,
+    strongestPositive: pos[0]?.level,
+    strongestNegative: neg[0]?.level
+  };
+}
+function dynamicGammaRead(g, rows, lv){
+  const net=asNum(g?.net_gex ?? g?.netGex ?? g?.total_gex ?? g?.totalGex) || 0;
+  const totalDex=asNum(g?.total_dex ?? g?.totalDex) || 0;
+  const mom=qqqMomentum(g);
+  const nearRows=rows.filter(r=>Math.abs(r.level-lv.spot)<=Math.max(100,lv.spot*0.005));
+  const nearPressure=nearRows.reduce((s,r)=>s+r.pressure,0);
+  let regime = net>0 ? 'Positive Gamma' : net<0 ? 'Negative Gamma' : 'Neutral Gamma';
+  let action = 'Wait for a zone.';
+  if(Math.abs(lv.spot-lv.call)<=35) action='At call wall: watch rejection, trapped buyers, or clean acceptance.';
+  else if(Math.abs(lv.spot-lv.put)<=35) action='At put wall: watch defense, flush, or reclaim.';
+  else if(Math.abs(lv.spot-lv.flip)<=35) action='At gamma flip: decision zone. Wait for confirmation.';
+  else if(nearPressure>0 && mom.direction==='up') action='Positive nearby pressure with QQQ momentum up: pullbacks into zones matter.';
+  else if(nearPressure<0 && mom.direction==='down') action='Negative nearby pressure with QQQ momentum down: avoid blind longs.';
+  else action='Middle zone: wait for price to reach call wall, put wall, or gamma flip.';
+  return {regime, action, nearPressure, totalDex, momentum:mom};
+}
+
 function getTransferredLevels(j){
   const g=j||{};
   const qqqSpot=asNum(g.qqqSpot ?? g.qqq_spot ?? g.spot ?? g.underlying_price ?? g.snapshot?.spot) || 674.18;
@@ -1778,32 +1843,39 @@ function gammaRows(g,lv){
     if(level==null) return;
     if(!(Number.isFinite(level) && level>10000 && level<50000)) return;
 
-    let gex=asNum(c.gex ?? c.gamma_exposure ?? c.exposure);
-    if(gex==null || Math.abs(gex)<1){
-      const gamma=asNum(c.gamma)||0;
-      const oi=asNum(c.oi ?? c.open_interest)||0;
-      gex=gamma*oi*1000000;
-    }
+    const pressure=contractPressure(c);
+    const gex=asNum(c.gex ?? c.gamma_exposure ?? c.exposure) || 0;
     rows.push({
       level,
       rawStrike:q,
       right:c.right ?? c.type ?? c.option_type ?? '',
-      gex:gex||0,
+      gex,
+      pressure,
       oi:asNum(c.oi ?? c.open_interest)||0,
       dex:asNum(c.dex)||0,
-      gamma:asNum(c.gamma)||0
+      vex:asNum(c.vex ?? c.vegaex)||0,
+      vanna:asNum(c.vanna ?? c.vannaex)||0,
+      charm:asNum(c.charm ?? c.charmex)||0,
+      gamma:asNum(c.gamma)||0,
+      iv:asNum(c.iv_pct ?? c.iv)||0,
+      delta:asNum(c.delta)||0
     });
   });
 
-  // If snapshot rows exist, preserve the full strike ladder. Use small buckets only to merge calls/puts at same NQ zone.
   const bucket=10, m=new Map();
   rows.forEach(r=>{
     const k=Math.round(r.level/bucket)*bucket;
-    const b=m.get(k)||{level:k,gex:0,oi:0,dex:0,gamma:0,count:0,raw:[]};
+    const b=m.get(k)||{level:k,gex:0,pressure:0,oi:0,dex:0,vex:0,vanna:0,charm:0,gamma:0,iv:0,delta:0,count:0,raw:[]};
     b.gex+=r.gex;
+    b.pressure+=r.pressure;
     b.oi+=r.oi;
     b.dex+=r.dex;
+    b.vex+=r.vex;
+    b.vanna+=r.vanna;
+    b.charm+=r.charm;
     b.gamma+=r.gamma;
+    b.iv+=r.iv;
+    b.delta+=r.delta;
     b.count++;
     if(r.rawStrike!=null) b.raw.push(r.rawStrike);
     m.set(k,b);
@@ -1811,23 +1883,22 @@ function gammaRows(g,lv){
 
   let out=[...m.values()].sort((a,b)=>a.level-b.level);
 
-  // Only if there is no snapshot/strike data, build visible wall-zone fallback bars.
-  if(!out.length || !out.some(r=>Math.abs(r.gex)>0)){
+  if(!out.length || !out.some(r=>Math.abs(r.pressure)>0)){
     const net=asNum(g.net_gex ?? g.netGex ?? g.total_gex ?? g.totalGex)||500000000;
     out=[
-      {level:lv.call,gex:Math.abs(net*.70),oi:0,dex:0,gamma:0,count:1,raw:[]},
-      {level:lv.flip,gex:(net>=0?1:-1)*Math.abs(net*.35),oi:0,dex:0,gamma:0,count:1,raw:[]},
-      {level:lv.put,gex:-Math.abs(net*.55),oi:0,dex:0,gamma:0,count:1,raw:[]}
+      {level:lv.call,gex:Math.abs(net*.70),pressure:Math.abs(net*.70),oi:0,dex:0,vex:0,vanna:0,charm:0,gamma:0,iv:0,delta:0,count:1,raw:[]},
+      {level:lv.flip,gex:(net>=0?1:-1)*Math.abs(net*.35),pressure:(net>=0?1:-1)*Math.abs(net*.35),oi:0,dex:0,vex:0,vanna:0,charm:0,gamma:0,iv:0,delta:0,count:1,raw:[]},
+      {level:lv.put,gex:-Math.abs(net*.55),pressure:-Math.abs(net*.55),oi:0,dex:0,vex:0,vanna:0,charm:0,gamma:0,iv:0,delta:0,count:1,raw:[]}
     ].sort((a,b)=>a.level-b.level);
   }
 
-  // Show everything practical. If there are too many strikes, keep every visible ladder row near spot and walls.
-  if(out.length>140){
+  if(out.length>180){
     const important=[lv.spot,lv.call,lv.put,lv.flip];
+    const maxP=Math.max(...out.map(x=>Math.abs(x.pressure)),1);
     out=out
-      .map(r=>({...r,score:Math.min(...important.map(x=>Math.abs(r.level-x))) - Math.abs(r.gex)/(Math.max(...out.map(x=>Math.abs(x.gex)),1))*100}))
+      .map(r=>({...r,score:Math.min(...important.map(x=>Math.abs(r.level-x))) - Math.abs(r.pressure)/maxP*120}))
       .sort((a,b)=>a.score-b.score)
-      .slice(0,140)
+      .slice(0,180)
       .sort((a,b)=>a.level-b.level);
   }
   return out;
@@ -1841,6 +1912,14 @@ function renderGamma(){
     const lv=getTransferredLevels(g);
     updateGammaCards(g);
     let rows=gammaRows(g,lv);
+    const derived=deriveWallsFromRows(rows,lv);
+    // Dynamic correction: if walls are fallback/suspicious, use strongest row zones from the snapshot.
+    if(Math.abs(lv.call-lv.spot)===350 && derived.derivedCall) lv.call=derived.derivedCall;
+    if(Math.abs(lv.put-lv.spot)===350 && derived.derivedPut) lv.put=derived.derivedPut;
+    const read=dynamicGammaRead(g,rows,lv);
+    setTextSafe('gamma-regime-pill','Regime: '+read.regime);
+    setTextSafe('gamma-read-title',read.regime+' · '+(read.momentum.direction==='up'?'QQQ momentum up':read.momentum.direction==='down'?'QQQ momentum down':'QQQ momentum flat'));
+    setTextSafe('gamma-read-text',read.action);
     const rangePct=getGammaRangePercentSetting();
     const rangePts=getGammaRangePointsFromSpot(lv.spot);
     if(Number.isFinite(rangePts)){
@@ -1862,7 +1941,7 @@ function renderGamma(){
       min=Math.min(...baseLevels)-100;
       max=Math.max(...baseLevels)+100;
     }
-    let maxAbs=Math.max(...rows.map(r=>Math.abs(r.gex)),1);
+    let maxAbs=Math.max(...rows.map(r=>Math.abs(r.pressure ?? r.gex)),1);
     if(maxAbs<100)maxAbs=100;
 
     const W=1120;
@@ -1889,16 +1968,16 @@ function renderGamma(){
     const bars=rows
       .filter(r=>Number.isFinite(r.level) && r.level>min && r.level<max)
       .map(r=>{
-        let v=r.gex||0;
+        let v=(r.pressure ?? r.gex)||0;
         if(v===0)v=maxAbs*.025;
         if(Math.abs(v)<maxAbs*.025)v=Math.sign(v||1)*maxAbs*.025;
         const y=yScale(r.level)-barH/2;
         const x=v>=0?x0:xScale(v);
         const w=Math.max(Math.abs(xScale(v)-x0),3);
-        const color=r.gex>=0?'rgba(15,143,107,.78)':'rgba(216,76,59,.78)';
-        const stroke=r.gex>=0?'rgba(15,143,107,1)':'rgba(185,28,28,1)';
+        const color=(r.pressure ?? r.gex)>=0?'rgba(15,143,107,.78)':'rgba(216,76,59,.78)';
+        const stroke=(r.pressure ?? r.gex)>=0?'rgba(15,143,107,1)':'rgba(185,28,28,1)';
         return `<g>
-          <title>NQ Zone: ${fmtLevel(r.level)}\nGEX: ${compactNum(r.gex)}\nDEX: ${compactNum(r.dex)}\nOI: ${fmtLevel(r.oi)}\nRows grouped: ${r.count}</title>
+          <title>NQ Zone: ${fmtLevel(r.level)}\nPressure: ${compactNum(r.pressure ?? r.gex)}\nPressure: ${compactNum(r.pressure ?? r.gex)}\nDEX: ${compactNum(r.dex)}\nOI: ${fmtLevel(r.oi)}\nRows grouped: ${r.count}</title>
           <rect x="${x}" y="${y}" width="${w}" height="${barH}" rx="4" fill="${color}" stroke="${stroke}" stroke-opacity=".32"/>
         </g>`;
       }).join('');
@@ -1941,7 +2020,7 @@ function renderGamma(){
       ${zone(lv.call,'Call Wall','#087a50')}
       ${zone(lv.flip,'Gamma Flip','#7c3aed')}
       ${zone(lv.put,'Put Wall','#b91c1c')}
-      <text x="${ml+plotW/2}" y="${H-20}" text-anchor="middle" font-size="14" font-weight="950" fill="#334155">GEX / Pressure</text>
+      <text x="${ml+plotW/2}" y="${H-20}" text-anchor="middle" font-size="14" font-weight="950" fill="#334155">Composite Pressure</text>
       <text x="28" y="${mt+plotH/2}" text-anchor="middle" transform="rotate(-90 28 ${mt+plotH/2})" font-size="14" font-weight="950" fill="#334155">NQ Zones</text>
       <g transform="translate(${ml},${mt-18})">
         <circle cx="0" cy="0" r="5" fill="#087a50"/><text x="12" y="4" font-size="12" font-weight="900" fill="#6b6560">+GEX</text>
@@ -2044,7 +2123,7 @@ async function loadGamma(opts={}){
   const strip=document.getElementById('gamma-status-strip');
   if(status) status.textContent='Loading...';
   window.gammaAnimating = Boolean(opts && opts.animate);
-  if(strip) strip.textContent='Status: Loading FreeFlow API · Chart: full 2D GEX map';
+  if(strip) strip.textContent='Status: Loading FreeFlow API · Chart: dynamic 2D pressure map';
   try{
     const expSel=document.getElementById('gamma-expiration');
     const dte=expSel ? expSel.value : '0';
@@ -2072,7 +2151,7 @@ async function loadGamma(opts={}){
     window.gammaData=best;
     if(typeof setApiDot==='function')setApiDot('freeflow','ok');
     if(status)status.textContent='Live / API connected';
-    if(strip){const lvTmp=getTransferredLevels(best);strip.textContent='Status: API connected · FreeFlow-only · NQ estimate: '+fmtLevel(lvTmp.spot)+' · Ratio '+lvTmp.ratio.toFixed(4)+' · Updated '+new Date().toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});}
+    if(strip){const lvTmp=getTransferredLevels(best);strip.textContent='Status: API connected · FreeFlow dynamic · NQ estimate: '+fmtLevel(lvTmp.spot)+' · Ratio '+lvTmp.ratio.toFixed(4)+' · Updated '+new Date().toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});}
     updateGammaCards(best);
     renderGamma();
   }catch(e){
