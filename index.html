@@ -1180,6 +1180,22 @@ window.setGammaColorMode = window.setGammaColorMode || function(v){
     <section class="page" id="page-more">
       <div class="card" style="margin-bottom:14px">
         <div class="card-header">
+          <div><div class="card-label">Trading Data Engine</div><h2>API + conversion controls</h2></div>
+        </div>
+        <div class="card-body">
+          <div class="settings-row">
+            <div><div class="settings-title">FreeFlow API key fallback</div><div class="settings-sub">Optional. Used only if Vercel env key fails. Stored in this browser only.</div></div>
+            <input class="settings-input" id="s-freeflow-key" placeholder="ff_..." onchange="localStorage.setItem('flowcharts_freeflow_key',this.value.trim());toast('FreeFlow key saved locally','green')">
+          </div>
+          <div class="settings-row">
+            <div><div class="settings-title">QQQ → NQ ratio fallback</div><div class="settings-sub">Used only if live NQ reference is unavailable. Default: 41.2</div></div>
+            <input class="settings-input" id="s-qqq-nq-ratio" value="41.2" onchange="localStorage.setItem('flowcharts_qqq_nq_ratio',this.value);renderGamma();toast('Ratio updated','green')">
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-header">
           <div><div class="card-label">Gamma Conversion</div><h2>FreeFlow-only QQQ → NQ ratio</h2></div>
         </div>
         <div class="card-body">
@@ -1336,7 +1352,7 @@ async function testFreeFlowApi(){
     let ok=false,lastErr=null;
     for(const url of urls){
       try{
-        const r=await fetch(url);
+        const headers={}; const localKey=localStorage.getItem('flowcharts_freeflow_key'); if(localKey)headers['x-freeflow-key']=localKey; const r=await fetch(url,{headers});
         if(!r.ok)throw new Error(url+' returned HTTP '+r.status);
         const j=await r.json();
         if(j&&j.ok===false)throw new Error(j.message||'FreeFlow error');
@@ -1767,14 +1783,26 @@ function dynamicGammaRead(g, rows, lv){
   return {regime, action, nearPressure, totalDex, momentum:mom};
 }
 
+function getFlowChartsRatio(){
+  const saved=asNum(localStorage.getItem('flowcharts_qqq_nq_ratio'));
+  return (Number.isFinite(saved) && saved>20 && saved<70) ? saved : 41.2;
+}
+function convertQqqLevelToNq(qqqLevel, qqqSpot, nqSpot){
+  qqqLevel=asNum(qqqLevel); qqqSpot=asNum(qqqSpot); nqSpot=asNum(nqSpot);
+  if(!Number.isFinite(qqqLevel)) return null;
+  if(qqqLevel>10000 && qqqLevel<50000) return qqqLevel;
+  if(!Number.isFinite(qqqSpot) || !Number.isFinite(nqSpot) || qqqSpot<=0) return null;
+  return nqSpot + ((qqqLevel - qqqSpot) / qqqSpot) * nqSpot;
+}
 function getTransferredLevels(j){
   const g=j||{};
   const qqqSpot=asNum(g.qqqSpot ?? g.qqq_spot ?? g.spot ?? g.underlying_price ?? g.snapshot?.spot) || 674.18;
-  const ratio=getFlowChartsRatio();
 
-  // FreeFlow-only spot estimate. No Yahoo/third-party quote.
-  // Uses QQQ spot from FreeFlow as the live anchor.
-  const nqRef=qqqSpot * ratio;
+  const apiNq=asNum(g.nqSpot ?? g.nq_spot ?? g.nq_ref ?? g.nqRef ?? g.nq_reference ?? g.nqReference ?? g.nq);
+  const ratio=asNum(g.conversionRatio) || getFlowChartsRatio();
+  let nqRef=apiNq || (qqqSpot * ratio);
+
+  if(!Number.isFinite(nqRef) || nqRef<10000 || nqRef>50000) nqRef = qqqSpot * getFlowChartsRatio();
 
   let call=wallLevel(g.callWall ?? g.call_wall ?? g.walls?.call_wall ?? g.call_wall_price);
   let put=wallLevel(g.putWall ?? g.put_wall ?? g.walls?.put_wall ?? g.put_wall_price);
@@ -1790,11 +1818,8 @@ function getTransferredLevels(j){
   if(!sane(flip)) flip = nqRef - 35;
 
   return {
-    call, put, flip,
-    spot:nqRef,
-    qqqSpot,
-    ratio,
-    spotSource:'FreeFlow QQQ spot × QQQ→NQ ratio'
+    call, put, flip, spot:nqRef, qqqSpot, ratio:nqRef/qqqSpot,
+    spotSource: apiNq ? 'Live NQ reference' : 'QQQ ratio fallback'
   };
 }
 function closestGammaLabel(lv){
@@ -2138,7 +2163,7 @@ async function loadGamma(opts={}){
     let best=null,lastErr=null,bestCount=-1;
     for(const url of urls){
       try{
-        const r=await fetch(url);
+        const headers={}; const localKey=localStorage.getItem('flowcharts_freeflow_key'); if(localKey)headers['x-freeflow-key']=localKey; const r=await fetch(url,{headers});
         if(!r.ok)throw new Error(url+' returned HTTP '+r.status);
         const j=await r.json();
         if(j&&j.ok===false)throw new Error(j.message||'FreeFlow API returned an error');
@@ -2151,7 +2176,7 @@ async function loadGamma(opts={}){
     window.gammaData=best;
     if(typeof setApiDot==='function')setApiDot('freeflow','ok');
     if(status)status.textContent='Live / API connected';
-    if(strip){const lvTmp=getTransferredLevels(best);strip.textContent='Status: API connected · FreeFlow dynamic · NQ estimate: '+fmtLevel(lvTmp.spot)+' · Ratio '+lvTmp.ratio.toFixed(4)+' · Updated '+new Date().toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});}
+    if(strip){const lvTmp=getTransferredLevels(best);strip.textContent='Status: API connected · Trading-ready · NQ: '+fmtLevel(lvTmp.spot)+' · Ratio '+lvTmp.ratio.toFixed(4)+' · Updated '+new Date().toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});}
     updateGammaCards(best);
     renderGamma();
   }catch(e){
@@ -2168,7 +2193,7 @@ async function loadGamma(opts={}){
 
 function loadSettings(){try{settings=JSON.parse(localStorage.getItem('nq_settings')||'{}')}catch{settings={}};applySettings()}
 function saveSetting(k,v){settings[k]=v;localStorage.setItem('nq_settings',JSON.stringify(settings));applySettings()}
-function applySettings(){let vals={sname:'s-name'};document.getElementById('s-name').value=settings.traderName||'Jeremiah';document.getElementById('s-account').value=settings.accountSize||'50000';document.getElementById('s-prime').value=settings.primeSt||'06:45';document.getElementById('s-good').value=settings.goodSt||'07:45';document.getElementById('s-end').value=settings.endSt||'10:30'; const ratioInput=document.getElementById('s-qqq-nq-ratio'); if(ratioInput)ratioInput.value=localStorage.getItem('flowcharts_qqq_nq_ratio')||'41.2';document.getElementById('toggle-sound').classList.toggle('on',localStorage.getItem('nq_sound')!=='off');updateStatusBar()}
+function applySettings(){let vals={sname:'s-name'};document.getElementById('s-name').value=settings.traderName||'Jeremiah';document.getElementById('s-account').value=settings.accountSize||'50000';document.getElementById('s-prime').value=settings.primeSt||'06:45';document.getElementById('s-good').value=settings.goodSt||'07:45';document.getElementById('s-end').value=settings.endSt||'10:30'; const ratioInput=document.getElementById('s-qqq-nq-ratio'); if(ratioInput)ratioInput.value=localStorage.getItem('flowcharts_qqq_nq_ratio')||'41.2'; const ffInput=document.getElementById('s-freeflow-key'); if(ffInput)ffInput.value=localStorage.getItem('flowcharts_freeflow_key')||'';document.getElementById('toggle-sound').classList.toggle('on',localStorage.getItem('nq_sound')!=='off');updateStatusBar()}
 function testConn(){loadTrades()} function clearLocal(){if(confirm('Delete local fallback trades?')){localStorage.removeItem('nq_local_trades');toast('Local trades cleared','green')}}
 function loadAudioSettings(){try{audioTracks=JSON.parse(localStorage.getItem('nq_audio')||'[]')}catch{audioTracks=[]}renderAudioList();document.getElementById('toggle-sound').classList.toggle('on',localStorage.getItem('nq_sound')!=='off')}
 function toggleSound(){let on=localStorage.getItem('nq_sound')!=='off';localStorage.setItem('nq_sound',on?'off':'on');loadAudioSettings()}
@@ -2330,6 +2355,7 @@ function playWinSound(){
 }
 async function init(){
   try{
+    localStorage.removeItem('flowcharts_nq_spot_override');
     loadSettings();
     applySettings();
     clearForm();
