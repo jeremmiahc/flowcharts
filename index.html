@@ -790,9 +790,78 @@ html,body{background:linear-gradient(115deg,#fbfaf7 0%,#f5f3ee 52%,#eef0f4 100%)
 .win-flash{pointer-events:none!important}
 </style>
 
+
+<style id="api-status-settings-ui">
+.api-status-dock{
+  position:fixed;
+  right:18px;
+  top:18px;
+  z-index:4500;
+  display:flex;
+  gap:8px;
+  align-items:center;
+  background:rgba(255,255,255,.92);
+  border:1px solid rgba(26,24,18,.10);
+  border-radius:999px;
+  padding:8px 10px;
+  box-shadow:0 14px 38px rgba(26,24,18,.12);
+  backdrop-filter:blur(16px);
+}
+.api-dot-item{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:900;color:#6b6560}
+.api-dot{
+  width:10px;height:10px;border-radius:999px;background:#f59e0b;
+  box-shadow:0 0 0 4px rgba(245,158,11,.14);
+}
+.api-dot.ok{background:#16a34a;box-shadow:0 0 0 4px rgba(22,163,74,.14)}
+.api-dot.err{background:#dc2626;box-shadow:0 0 0 4px rgba(220,38,38,.14)}
+.api-test-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+.api-test-card{
+  border:1px solid rgba(26,24,18,.10);
+  background:#fff;
+  border-radius:18px;
+  padding:16px;
+}
+.api-test-card h3{font-size:17px;margin:4px 0 8px}
+.api-test-card p{font-size:12px;color:#6b6560;line-height:1.45;font-weight:700}
+.api-test-row{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px}
+.api-status-pill{
+  border-radius:999px;
+  padding:7px 10px;
+  font-size:11px;
+  font-weight:900;
+  background:#fffbeb;
+  color:#92400e;
+  border:1px solid #fde68a;
+}
+.api-status-pill.ok{background:#f0faf4;color:#166534;border-color:#bbf7d0}
+.api-status-pill.err{background:#fef2f2;color:#991b1b;border-color:#fecaca}
+.settings-error-log{
+  margin-top:14px;
+  max-height:220px;
+  overflow:auto;
+  border:1px solid rgba(153,27,27,.14);
+  background:#fffafa;
+  border-radius:16px;
+  padding:10px;
+}
+.settings-error-row{
+  border-bottom:1px solid rgba(153,27,27,.10);
+  padding:9px 8px;
+  font-size:12px;
+}
+.settings-error-row:last-child{border-bottom:0}
+.settings-error-row b{display:block;color:#991b1b;margin-bottom:3px}
+.settings-error-row span{color:#6b6560;font-weight:700;line-height:1.35}
+.settings-error-empty{color:#a8a298;font-size:12px;font-weight:800;padding:10px}
+</style>
+
 </head>
 <body>
 <div id="error-stack" aria-live="polite"></div>
+<div class="api-status-dock" id="api-status-dock">
+  <div class="api-dot-item"><i class="api-dot" id="dot-supabase"></i><span>Supabase</span></div>
+  <div class="api-dot-item"><i class="api-dot" id="dot-freeflow"></i><span>FreeFlow</span></div>
+</div>
 <div class="app">
   <header class="topbar">
     <div><div class="brand-kicker" id="top-date">EdgeFlow</div><div class="page-title" id="page-title">Today's Session</div></div>
@@ -1027,6 +1096,38 @@ html,body{background:linear-gradient(115deg,#fbfaf7 0%,#f5f3ee 52%,#eef0f4 100%)
     </section>
 
     <section class="page" id="page-more">
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-header">
+          <div><div class="card-label">API Connection Tests</div><h2>Connection health</h2></div>
+          <button class="btn btn-primary" onclick="testAllApis()">Test Both</button>
+        </div>
+        <div class="card-body">
+          <div class="api-test-grid">
+            <div class="api-test-card">
+              <div class="card-label">Supabase</div>
+              <h3>Trades Database</h3>
+              <p>Tests if trades, history, stats, screenshots, and calendar can load/save.</p>
+              <div class="api-test-row"><span class="api-status-pill" id="supabase-test-pill">Not tested</span><button class="btn btn-ghost" onclick="testSupabaseApi()">Test Supabase</button></div>
+            </div>
+            <div class="api-test-card">
+              <div class="card-label">FreeFlow</div>
+              <h3>Gamma API</h3>
+              <p>Tests if FreeFlow API route is responding for Gamma Lens data.</p>
+              <div class="api-test-row"><span class="api-status-pill" id="freeflow-test-pill">Not tested</span><button class="btn btn-ghost" onclick="testFreeFlowApi()">Test FreeFlow</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-header">
+          <div><div class="card-label">Website Errors</div><h2>Error log</h2></div>
+          <button class="btn btn-ghost" onclick="clearSettingsErrors()">Clear</button>
+        </div>
+        <div class="card-body">
+          <div class="settings-error-log" id="settings-error-log"><div class="settings-error-empty">No website errors recorded.</div></div>
+        </div>
+      </div>
+
       <div class="card"><div class="card-header"><div><div class="card-label">Database</div><h2>Supabase</h2></div><button class="btn btn-primary" onclick="testConn()">Test / Reload Supabase</button></div><div class="card-body"><div id="conn-detail" class="muted">Checking...</div></div></div>
       <div class="card"><div class="card-header"><div class="card-label">Profile</div></div>
         <div class="settings-row"><div><div class="settings-title">Trader Name</div></div><input class="settings-input" id="s-name" oninput="saveSetting('traderName',this.value)"></div>
@@ -1058,11 +1159,17 @@ const FREEFLOW_KEY='ff_Ys_KBZCY2cEwx7fV6KQcriRjRhyvfvLMNitL0_dh8WU';
 let trades=[],settings={},ssFiles=[],ssFilesOf=[],ssFilesBm=[],audioTracks=[],historyFilter='all',currentPage='today',camera={eye:{x:1.52,y:1.18,z:.82},center:{x:0,y:0,z:0}};
 function showError(title,msg){
   try{
+    const entry={time:new Date().toISOString(),title:title||'Error',message:String(msg||'Something went wrong.')};
+    const old=JSON.parse(localStorage.getItem('flowcharts_error_log')||'[]');
+    old.unshift(entry);
+    localStorage.setItem('flowcharts_error_log',JSON.stringify(old.slice(0,50)));
+    if(typeof renderSettingsErrors==='function') renderSettingsErrors();
+
     const stack=document.getElementById('error-stack');
     if(!stack)return;
     const box=document.createElement('div');
     box.className='error-pop';
-    box.innerHTML=`<strong>${title||'Error'}</strong><span>${String(msg||'Something went wrong.').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</span><button type="button">Dismiss</button>`;
+    box.innerHTML=`<strong>${entry.title}</strong><span>${entry.message.replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</span><button type="button">Dismiss</button>`;
     box.querySelector('button').onclick=()=>box.remove();
     stack.prepend(box);
     setTimeout(()=>box.remove(),9000);
@@ -1103,8 +1210,72 @@ function setConn(state,msg){
   }
   let d=document.getElementById('conn-detail');
   if(d)d.textContent=msg||'';
+  setApiDot('supabase',state==='ok'?'ok':state==='err'?'err':'warn');
 }
-function navTo(p){document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.getElementById('page-'+p).classList.add('active');document.querySelectorAll('.tab-item').forEach(x=>x.classList.remove('active'));document.getElementById('tab-'+p).classList.add('active');currentPage=p;document.getElementById('page-title').textContent={today:"Today's Session",history:"Trade History",log:"Log a Trade",gamma:"Gamma Lens",stats:"Statistics",more:"Settings"}[p];if(p==='stats')renderStats();if(p==='today')renderToday();if(p==='history')renderHistory();if(p==='gamma')setTimeout(renderGamma,80);if(p==='more'){applySettings();loadAudioSettings()}}
+
+function setApiDot(which,state){
+  const el=document.getElementById(which==='supabase'?'dot-supabase':'dot-freeflow');
+  if(!el)return;
+  el.className='api-dot '+(state==='ok'?'ok':state==='err'?'err':'');
+}
+async function testSupabaseApi(){
+  const pill=document.getElementById('supabase-test-pill');
+  if(pill){pill.className='api-status-pill';pill.textContent='Testing...'}
+  try{
+    await sbSelect('trades');
+    setApiDot('supabase','ok');
+    if(pill){pill.className='api-status-pill ok';pill.textContent='Connected'}
+    toast('Supabase connected','green');
+    return true;
+  }catch(e){
+    setApiDot('supabase','err');
+    if(pill){pill.className='api-status-pill err';pill.textContent='Error'}
+    showError('Supabase Test Failed',e.message||'Supabase connection failed.');
+    return false;
+  }
+}
+async function testFreeFlowApi(){
+  const pill=document.getElementById('freeflow-test-pill');
+  if(pill){pill.className='api-status-pill';pill.textContent='Testing...'}
+  try{
+    const urls=['/api/freeflow?type=expirations&symbol=QQQ','/api/freeflow'];
+    let ok=false,lastErr=null;
+    for(const url of urls){
+      try{
+        const r=await fetch(url);
+        if(!r.ok)throw new Error(url+' returned HTTP '+r.status);
+        const j=await r.json();
+        if(j&&j.ok===false)throw new Error(j.message||'FreeFlow error');
+        ok=true;break;
+      }catch(e){lastErr=e}
+    }
+    if(!ok)throw lastErr||new Error('FreeFlow API unavailable');
+    setApiDot('freeflow','ok');
+    if(pill){pill.className='api-status-pill ok';pill.textContent='Connected'}
+    toast('FreeFlow API connected','green');
+    return true;
+  }catch(e){
+    setApiDot('freeflow','err');
+    if(pill){pill.className='api-status-pill err';pill.textContent='Error'}
+    showError('FreeFlow Test Failed',e.message||'FreeFlow API connection failed.');
+    return false;
+  }
+}
+function testAllApis(){testSupabaseApi();testFreeFlowApi()}
+function renderSettingsErrors(){
+  const box=document.getElementById('settings-error-log');
+  if(!box)return;
+  let logs=[];
+  try{logs=JSON.parse(localStorage.getItem('flowcharts_error_log')||'[]')}catch{}
+  box.innerHTML=logs.length?logs.slice(0,12).map(e=>`<div class="settings-error-row"><b>${new Date(e.time).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})} · ${e.title}</b><span>${String(e.message||'').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</span></div>`).join(''):'<div class="settings-error-empty">No website errors recorded.</div>';
+}
+function clearSettingsErrors(){
+  localStorage.removeItem('flowcharts_error_log');
+  renderSettingsErrors();
+  toast('Error log cleared','green');
+}
+
+function navTo(p){document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.getElementById('page-'+p).classList.add('active');document.querySelectorAll('.tab-item').forEach(x=>x.classList.remove('active'));document.getElementById('tab-'+p).classList.add('active');currentPage=p;document.getElementById('page-title').textContent={today:"Today's Session",history:"Trade History",log:"Log a Trade",gamma:"Gamma Lens",stats:"Statistics",more:"Settings"}[p];if(p==='stats')renderStats();if(p==='today')renderToday();if(p==='history')renderHistory();if(p==='gamma')setTimeout(renderGamma,80);if(p==='more'){applySettings();loadAudioSettings();renderSettingsErrors()}}
 function sessTimes(){let toMin=t=>{let p=(t||'00:00').split(':');return +p[0]*60+(+p[1]||0)};return{prime:toMin(settings.primeSt||'06:45'),good:toMin(settings.goodSt||'07:45'),end:toMin(settings.endSt||'10:30')}}
 function getSessionLabel(time){if(!time)return'';let [h,m]=time.split(':').map(Number),mins=h*60+(m||0),s=sessTimes();if(mins>=s.prime&&mins<s.good)return'Prime';if(mins>=s.good&&mins<s.end)return'Good';if(mins>=s.end)return'Slow';return''}
 function updateStatusBar(){let n=new Date(),mins=n.getHours()*60+n.getMinutes(),s=sessTimes(),b=document.getElementById('session-badge');let txt='Pre-Session',cls='warn';if(mins>=s.prime&&mins<s.good){txt='Prime Session';cls='ok'}else if(mins>=s.good&&mins<s.end){txt='Good Session';cls='warn'}else if(mins>=s.end){txt='Session Closed';cls=''}b.className='status-badge '+cls;b.textContent=txt;document.getElementById('top-date').textContent=n.toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'})}
@@ -1378,6 +1549,7 @@ async function loadGamma(){
     }
     if(!j) throw lastErr||new Error('FreeFlow API unavailable');
     window.gammaData=j;
+    setApiDot('freeflow','ok');
     if(status) status.textContent='Live / API connected';
     if(strip) strip.textContent='Status: API connected · Chart: 2D GEX zones · Updated '+new Date().toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
     updateGammaCards(j);
@@ -1387,6 +1559,7 @@ async function loadGamma(){
   }catch(e){
     console.error(e);
     window.gammaData=window.gammaData||mockGammaData();
+    setApiDot('freeflow','err');
     if(status) status.textContent='API error / fallback';
     if(strip) strip.textContent='Status: API error · Showing local fallback zones until FreeFlow connects';
     if(typeof showError==='function') showError('Gamma API Error',e.message||'FreeFlow data could not load.');
