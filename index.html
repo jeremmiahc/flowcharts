@@ -1061,7 +1061,7 @@ window.setGammaColorMode = window.setGammaColorMode || function(v){
             </div>
           </div>
           <div class="market-grid gamma-core-grid">
-            <div class="gamma-mini"><span>Current NQ</span><strong id="gamma-nq-ref">—</strong><small>NQ reference price</small></div>
+            <div class="gamma-mini"><span>Current NQ</span><strong id="gamma-nq-ref">—</strong><small>Live NQ spot / fallback</small></div>
             <div class="gamma-mini"><span>Net GEX</span><strong id="gamma-net-gex">—</strong><small>Dealer pressure</small></div>
             <div class="gamma-mini"><span>Reaction Bias</span><strong id="gamma-reaction-bias">—</strong><small>Chop or expansion</small></div>
             <div class="gamma-mini"><span>Closest Level</span><strong id="gamma-closest-level">—</strong><small>Nearest gamma zone</small></div>
@@ -1113,7 +1113,7 @@ window.setGammaColorMode = window.setGammaColorMode || function(v){
           <div class="level-card level-flip"><div class="eyebrow">Gamma Flip</div><strong id="g-flip">—</strong><span>Dealer behavior pivot</span><small>Use it: do not blindly fade near the flip; wait for confirmation.</small></div>
           <div class="level-card level-net"><div class="eyebrow">Net GEX</div><strong id="g-net-gex">—</strong><span>Overall dealer positioning bias</span><small>Use it: positive favors pinning; negative favors expansion.</small></div>
           <div class="level-card level-range"><div class="eyebrow">Expected Range</div><strong id="g-range">—</strong><span>Pinning / trap zone</span><small>Use it: avoid chasing the middle without order-flow confirmation.</small></div>
-          <div class="level-card level-spot"><div class="eyebrow">Current NQ</div><strong id="g-spot">—</strong><span>Translated NQ reference price</span><small>Use it: know whether price is near a wall, flip, or middle of range.</small></div>
+          <div class="level-card level-spot"><div class="eyebrow">Current NQ</div><strong id="g-spot">—</strong><span>Translated Live NQ spot / fallback</span><small>Use it: know whether price is near a wall, flip, or middle of range.</small></div>
           <div class="level-card level-closest"><div class="eyebrow">Closest Major Level</div><strong id="g-closest">—</strong><span>Nearest reaction zone</span><small>Use it: focus order-flow reads around the closest level first.</small></div>
           <div class="level-card level-regime"><div class="eyebrow">Current Regime</div><strong id="g-regime">—</strong><span>Pinning / Mean Reversion / Acceleration</span><small>Use it: decide whether to fade, wait, or expect expansion.</small></div>
         </section>
@@ -1650,25 +1650,37 @@ function getContracts(g){
 function getTransferredLevels(j){
   const g=j||{};
   const qqqSpot=asNum(g.qqqSpot ?? g.qqq_spot ?? g.spot ?? g.underlying_price ?? g.snapshot?.spot) || 674.18;
-  const nqRef=asNum(g.nqSpot ?? g.nq_ref ?? g.nqRef ?? g.nq_reference ?? g.nqReference ?? g.nq) || 27906;
-  const ratio = qqqSpot ? nqRef / qqqSpot : 41.39;
+
+  // Best NQ source: backend quote from /api/freeflow using NQ=F.
+  // Optional manual emergency override: localStorage.flowcharts_nq_spot_override.
+  const manualOverride=asNum(localStorage.getItem('flowcharts_nq_spot_override'));
+  const apiNq=asNum(g.nqSpot ?? g.nq_spot ?? g.nq_ref ?? g.nqRef ?? g.nq_reference ?? g.nqReference ?? g.nq);
+  let nqRef=manualOverride || apiNq;
+
+  // Last resort only: estimate using a recent normal ratio, but do not lock it forever.
+  if(!Number.isFinite(nqRef) || nqRef<10000 || nqRef>50000){
+    nqRef = qqqSpot * 41.2;
+  }
+
+  const ratio = qqqSpot ? nqRef / qqqSpot : 41.2;
 
   let call=wallLevel(g.callWall ?? g.call_wall ?? g.walls?.call_wall ?? g.call_wall_price);
   let put=wallLevel(g.putWall ?? g.put_wall ?? g.walls?.put_wall ?? g.put_wall_price);
   let flip=wallLevel(g.gammaFlip ?? g.gamma_flip ?? g.walls?.gamma_flip ?? g.zero_gamma ?? g.flip);
 
-  // If the API returns QQQ strikes, map to NQ. If it already returns NQ-size values, keep them.
   if(call && Math.abs(call) < 1000) call*=ratio;
   if(put && Math.abs(put) < 1000) put*=ratio;
   if(flip && Math.abs(flip) < 1000) flip*=ratio;
 
-  // Guard against accidentally using exposure as a price level.
   const sane=(x)=>Number.isFinite(x) && x>10000 && x<50000;
   if(!sane(call)) call = nqRef + 350;
   if(!sane(put)) put = nqRef - 350;
   if(!sane(flip)) flip = nqRef - 35;
 
-  return {call, put, flip, spot:nqRef, qqqSpot, ratio};
+  return {
+    call, put, flip, spot:nqRef, qqqSpot, ratio,
+    spotSource: manualOverride ? 'Manual override' : (apiNq ? (g.nqQuoteSource || 'NQ quote API') : 'QQQ ratio fallback')
+  };
 }
 function closestGammaLabel(lv){
   const arr=[['Call Wall',lv.call],['Put Wall',lv.put],['Gamma Flip',lv.flip]].filter(x=>Number.isFinite(x[1]));
@@ -1926,7 +1938,7 @@ async function loadGamma(){
     window.gammaData=best;
     if(typeof setApiDot==='function')setApiDot('freeflow','ok');
     if(status)status.textContent='Live / API connected';
-    if(strip)strip.textContent='Status: API connected · Chart: full 2D GEX map · Updated '+new Date().toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+    if(strip){const lvTmp=getTransferredLevels(best);strip.textContent='Status: API connected · NQ spot: '+fmtLevel(lvTmp.spot)+' ('+lvTmp.spotSource+') · Updated '+new Date().toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});}
     updateGammaCards(best);
     renderGamma();
   }catch(e){
