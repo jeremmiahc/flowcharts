@@ -1037,7 +1037,7 @@ html,body{background:linear-gradient(115deg,#fbfaf7 0%,#f5f3ee 52%,#eef0f4 100%)
             </div>
             <div class="gamma-controls">
               <label><span>Expiration</span><select id="gamma-expiration" onchange="setGammaExpiration(this.value)">
-                <option value="0">0DTE</option><option value="1">1DTE</option><option value="2">2DTE</option><option value="3">2DTE</option>
+                <option value="0">0DTE</option><option value="1">1DTE</option><option value="2">2DTE</option><option value="3">3DTE</option>
                 <option value="5">5DTE</option><option value="7">7DTE</option><option value="14">14DTE</option>
               </select></label>
               
@@ -1264,7 +1264,7 @@ async function testFreeFlowApi(){
   const pill=document.getElementById('freeflow-test-pill');
   if(pill){pill.className='api-status-pill';pill.textContent='Testing...'}
   try{
-    const urls=['/api/freeflow?type=expirations&symbol=QQQ','/api/freeflow'];
+    const urls=['/api/freeflow?type=expirations&symbol=QQQ','/api/freeflow?endpoint=expirations&symbol=QQQ'];
     let ok=false,lastErr=null;
     for(const url of urls){
       try{
@@ -1761,6 +1761,25 @@ function renderGamma(){
   }catch(e){console.error(e);if(typeof showError==='function')showError('Gamma Render Error',e.message)}
 }
 
+
+function setGammaExpiration(v){
+  try{
+    const el=document.getElementById('gamma-expiration');
+    if(el && el.value !== String(v)) el.value=String(v);
+    if(typeof loadGamma==='function') loadGamma();
+    else if(typeof renderGamma==='function') renderGamma();
+  }catch(e){if(typeof showError==='function')showError('Gamma Expiration Error',e.message)}
+}
+function setGammaColorMode(v){
+  try{
+    const el=document.getElementById('gamma-color-mode');
+    if(el && el.value !== String(v)) el.value=String(v);
+    if(typeof renderGamma==='function') renderGamma();
+  }catch(e){if(typeof showError==='function')showError('Gamma Color Error',e.message)}
+}
+window.setGammaExpiration=setGammaExpiration;
+window.setGammaColorMode=setGammaColorMode;
+
 async function loadGamma(){
   const status=document.getElementById('gamma-status');
   const strip=document.getElementById('gamma-status-strip');
@@ -1770,9 +1789,11 @@ async function loadGamma(){
     const expSel=document.getElementById('gamma-expiration');
     const dte=expSel ? expSel.value : '0';
     const urls=[
+      `/api/freeflow?type=gamma&symbol=QQQ&dte=${encodeURIComponent(dte)}`,
+      `/api/freeflow?type=snapshot&symbol=QQQ&dte=${encodeURIComponent(dte)}`,
       `/api/freeflow?type=walls&symbol=QQQ&dte=${encodeURIComponent(dte)}`,
-      `/api/freeflow?endpoint=walls&symbol=QQQ&dte=${encodeURIComponent(dte)}`,
-      `/api/freeflow`
+      `/api/freeflow?endpoint=snapshot&symbol=QQQ&dte=${encodeURIComponent(dte)}`,
+      `/api/freeflow?endpoint=walls&symbol=QQQ&dte=${encodeURIComponent(dte)}`
     ];
     let j=null,lastErr=null;
     for(const url of urls){
