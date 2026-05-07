@@ -64,36 +64,6 @@ function contractsFromSnapshot(snapshot) {
   );
 }
 
-async function fetchNqSpot() {
-  const symbol = process.env.NQ_QUOTE_SYMBOL || "NQ=F";
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1m&range=1d`;
-  try {
-    const r = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 FlowCharts/1.0",
-        "Accept": "application/json",
-      },
-    });
-    if (!r.ok) throw new Error(`NQ quote HTTP ${r.status}`);
-    const data = await r.json();
-    const result = data?.chart?.result?.[0];
-    const meta = result?.meta || {};
-    const price =
-      Number(meta.regularMarketPrice) ||
-      Number(meta.chartPreviousClose) ||
-      Number(meta.previousClose);
-    if (!Number.isFinite(price) || price < 10000 || price > 50000) return null;
-    return {
-      nqSpot: price,
-      nqQuoteSymbol: symbol,
-      nqQuoteSource: "Yahoo Finance chart",
-      nqQuoteTime: new Date().toISOString(),
-    };
-  } catch (e) {
-    console.error("NQ quote fetch failed", e.message);
-    return null;
-  }
-}
 
 
 function cleanKey(value) {
@@ -144,8 +114,7 @@ module.exports = async function handler(req, res) {
     const exp = pickExpiration(expirations, requestedDte, requestedExp);
 
     if (endpoint === "expirations") {
-      const nqQuote = await fetchNqSpot();
-      return json(res, 200, { ok: true, symbol, expirations, selectedExpiration: exp, ...(nqQuote || {}) });
+      return json(res, 200, { ok: true, symbol, expirations, selectedExpiration: exp });
     }
 
     if (!exp) {
@@ -153,19 +122,13 @@ module.exports = async function handler(req, res) {
     }
 
     if (endpoint === "walls") {
-      const [walls, nqQuote] = await Promise.all([
-        ff("/walls", { symbol, exp }, key),
-        fetchNqSpot(),
-      ]);
-      return json(res, 200, { ok: true, symbol, expiration: exp, expirations, ...(nqQuote || {}), ...walls });
+      const walls = await ff("/walls", { symbol, exp }, key);
+      return json(res, 200, { ok: true, symbol, expiration: exp, expirations, ...walls });
     }
 
     if (endpoint === "snapshot") {
-      const [snapshot, nqQuote] = await Promise.all([
-        ff("/snapshot", { symbol, exp }, key),
-        fetchNqSpot(),
-      ]);
-      return json(res, 200, { ok: true, symbol, expiration: exp, expirations, ...(nqQuote || {}), ...snapshot });
+      const snapshot = await ff("/snapshot", { symbol, exp }, key);
+      return json(res, 200, { ok: true, symbol, expiration: exp, expirations, ...snapshot });
     }
 
     if (endpoint === "chart") {
@@ -174,10 +137,9 @@ module.exports = async function handler(req, res) {
     }
 
     // Default/full gamma payload: expirations + walls + snapshot + contracts in one response.
-    const [walls, snapshot, nqQuote] = await Promise.all([
+    const [walls, snapshot] = await Promise.all([
       ff("/walls", { symbol, exp }, key),
       ff("/snapshot", { symbol, exp }, key),
-      fetchNqSpot(),
     ]);
 
     const contracts = contractsFromSnapshot(snapshot);
@@ -192,11 +154,11 @@ module.exports = async function handler(req, res) {
       dte: snapshot?.dte ?? daysBetweenToday(exp),
       spot: snapshot?.spot ?? walls?.spot ?? null,
       qqqSpot: snapshot?.spot ?? walls?.spot ?? null,
-      nqSpot: nqQuote?.nqSpot ?? null,
-      nqQuoteSymbol: nqQuote?.nqQuoteSymbol ?? null,
-      nqQuoteSource: nqQuote?.nqQuoteSource ?? null,
-      nqQuoteTime: nqQuote?.nqQuoteTime ?? null,
-      conversionRatio: (nqQuote?.nqSpot && (snapshot?.spot ?? walls?.spot)) ? nqQuote.nqSpot / (snapshot?.spot ?? walls?.spot) : null,
+      // FreeFlow-only mode: no external NQ quote is used.
+      // Frontend derives NQ-equivalent zones from QQQ spot and the selected QQQ→NQ ratio.
+      nqSpot: null,
+      nqQuoteSource: "FreeFlow-only calculation",
+      conversionRatio: null,
       total_gex: snapshot?.total_gex ?? walls?.total_gex ?? walls?.net_gex ?? null,
       net_gex: snapshot?.total_gex ?? walls?.net_gex ?? null,
       total_dex: snapshot?.total_dex ?? walls?.total_dex ?? null,

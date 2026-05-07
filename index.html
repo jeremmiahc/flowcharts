@@ -890,6 +890,22 @@ html,body{background:linear-gradient(115deg,#fbfaf7 0%,#f5f3ee 52%,#eef0f4 100%)
 @media(max-width:1200px){.gamma-controls{grid-template-columns:repeat(3,minmax(120px,1fr))!important}}
 </style>
 
+
+<style id="gamma-clean-controls-animation-css">
+.clean-gamma-controls,.gamma-controls{grid-template-columns:repeat(5,minmax(120px,1fr))!important;align-items:end}
+#gamma-chart svg{cursor:crosshair}
+.gamma-map-animate .premium-gex-chart rect,
+.gamma-map-animate .premium-gex-chart line,
+.gamma-map-animate .premium-gex-chart text{
+  animation:gammaFadeSlide .42s cubic-bezier(.2,.8,.2,1);
+}
+@keyframes gammaFadeSlide{
+  from{opacity:.28;transform:translateY(10px)}
+  to{opacity:1;transform:translateY(0)}
+}
+@media(max-width:1200px){.clean-gamma-controls,.gamma-controls{grid-template-columns:repeat(3,minmax(120px,1fr))!important}}
+</style>
+
 </head>
 <body>
 
@@ -1068,7 +1084,7 @@ window.setGammaColorMode = window.setGammaColorMode || function(v){
             </div>
           </div>
           <div class="market-grid gamma-core-grid">
-            <div class="gamma-mini"><span>Current NQ</span><strong id="gamma-nq-ref">—</strong><small>Live NQ spot / fallback</small></div>
+            <div class="gamma-mini"><span>Current NQ</span><strong id="gamma-nq-ref">—</strong><small>FreeFlow QQQ-based NQ estimate</small></div>
             <div class="gamma-mini"><span>Net GEX</span><strong id="gamma-net-gex">—</strong><small>Dealer pressure</small></div>
             <div class="gamma-mini"><span>Reaction Bias</span><strong id="gamma-reaction-bias">—</strong><small>Chop or expansion</small></div>
             <div class="gamma-mini"><span>Closest Level</span><strong id="gamma-closest-level">—</strong><small>Nearest gamma zone</small></div>
@@ -1086,13 +1102,6 @@ window.setGammaColorMode = window.setGammaColorMode || function(v){
               <label><span>Expiration</span><select id="gamma-expiration" onchange="setGammaExpiration(this.value)">
                 <option value="0">0DTE</option><option value="1">1DTE</option><option value="2">2DTE</option><option value="3">3DTE</option>
                 <option value="5">5DTE</option><option value="7">7DTE</option><option value="14">14DTE</option>
-              </select></label>
-              
-              
-              <label><span>Color</span><select id="gamma-color-mode" onchange="setGammaColorMode(this.value)">
-                <option value="classic">Classic</option><option value="bookmap">Bookmap</option><option value="bookmapLight">Bookmap Light</option>
-                <option value="heatmap">Heatmap</option><option value="contrast">Contrast</option><option value="iceberg">Iceberg</option>
-                <option value="liquidity">Liquidity</option><option value="mono">Monochrome Pro</option>
               </select></label>
           
               <button class="control-btn primary" id="gamma-reload-btn" onclick="loadGamma()">Reload</button>
@@ -1120,7 +1129,7 @@ window.setGammaColorMode = window.setGammaColorMode || function(v){
           <div class="level-card level-flip"><div class="eyebrow">Gamma Flip</div><strong id="g-flip">—</strong><span>Dealer behavior pivot</span><small>Use it: do not blindly fade near the flip; wait for confirmation.</small></div>
           <div class="level-card level-net"><div class="eyebrow">Net GEX</div><strong id="g-net-gex">—</strong><span>Overall dealer positioning bias</span><small>Use it: positive favors pinning; negative favors expansion.</small></div>
           <div class="level-card level-range"><div class="eyebrow">Expected Range</div><strong id="g-range">—</strong><span>Pinning / trap zone</span><small>Use it: avoid chasing the middle without order-flow confirmation.</small></div>
-          <div class="level-card level-spot"><div class="eyebrow">Current NQ</div><strong id="g-spot">—</strong><span>Translated Live NQ spot / fallback</span><small>Use it: know whether price is near a wall, flip, or middle of range.</small></div>
+          <div class="level-card level-spot"><div class="eyebrow">Current NQ</div><strong id="g-spot">—</strong><span>Translated FreeFlow QQQ-based NQ estimate</span><small>Use it: know whether price is near a wall, flip, or middle of range.</small></div>
           <div class="level-card level-closest"><div class="eyebrow">Closest Major Level</div><strong id="g-closest">—</strong><span>Nearest reaction zone</span><small>Use it: focus order-flow reads around the closest level first.</small></div>
           <div class="level-card level-regime"><div class="eyebrow">Current Regime</div><strong id="g-regime">—</strong><span>Pinning / Mean Reversion / Acceleration</span><small>Use it: decide whether to fade, wait, or expect expansion.</small></div>
         </section>
@@ -1169,6 +1178,18 @@ window.setGammaColorMode = window.setGammaColorMode || function(v){
     </section>
 
     <section class="page" id="page-more">
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-header">
+          <div><div class="card-label">Gamma Conversion</div><h2>FreeFlow-only QQQ → NQ ratio</h2></div>
+        </div>
+        <div class="card-body">
+          <div class="settings-row">
+            <div><div class="settings-title">QQQ → NQ ratio</div><div class="settings-sub">Used to estimate NQ zones from FreeFlow QQQ spot/strikes. Default: 41.2</div></div>
+            <input class="settings-input" id="s-qqq-nq-ratio" value="41.2" onchange="localStorage.setItem('flowcharts_qqq_nq_ratio',this.value);renderGamma();toast('Gamma ratio updated','green')">
+          </div>
+        </div>
+      </div>
+
       <div class="card" style="margin-bottom:14px">
         <div class="card-header">
           <div><div class="card-label">API Connection Tests</div><h2>Connection health</h2></div>
@@ -1596,7 +1617,13 @@ function openCalendarDay(date){
     if(target)target.scrollIntoView({behavior:'smooth',block:'start'});
   },60);
 }
-function renderEquity(){let el=document.getElementById('equity-svg'),rs=trades.filter(t=>t.r_result!=null).slice().reverse();if(rs.length<2){el.innerHTML='<div class="muted">Log at least 2 trades to see your curve</div>';return}let vals=[0],run=0;rs.forEach(t=>{run+=t.r_result;vals.push(run)});let max=Math.max(...vals),min=Math.min(...vals),range=max-min||1,W=900,H=230,pad=28;let sx=i=>pad+i/(vals.length-1)*(W-pad*2),sy=v=>pad+(H-pad*2)-(v-min)/range*(H-pad*2);let d='M'+sx(0)+','+sy(vals[0]);for(let i=1;i<vals.length;i++)d+=' L'+sx(i)+','+sy(vals[i]);el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" height="230"><path d="${d} L${sx(vals.length-1)},${H-pad} L${pad},${H-pad} Z" fill="${run>=0?'rgba(22,101,52,.10)':'rgba(153,27,27,.10)'}"/><path d="${d}" fill="none" stroke="${run>=0?'#166534':'#991b1b'}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;document.getElementById('equity-meta').textContent=(run>=0?'+':'')+run.toFixed(2)+'R'}
+function renderEquity(){let el=document.getElementById('equity-svg'),rs=trades.filter(t=>t.r_result!=null).slice().reverse();if(rs.length<2){el.innerHTML='<div class="muted">Log at least 2 trades to see your curve</div>';return}let vals=[0],run=0;rs.forEach(t=>{run+=t.r_result;vals.push(run)});let max=Math.max(...vals),min=Math.min(...vals),range=max-min||1,W=900,H=230,pad=28;let sx=i=>pad+i/(vals.length-1)*(W-pad*2),sy=v=>pad+(H-pad*2)-(v-min)/range*(H-pad*2);let d='M'+sx(0)+','+sy(vals[0]);for(let i=1;i<vals.length;i++)d+=' L'+sx(i)+','+sy(vals[i]);el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" height="230"><path d="${d} L${sx(vals.length-1)},${H-pad} L${pad},${H-pad} Z" fill="${run>=0?'rgba(22,101,52,.10)':'rgba(153,27,27,.10)'}"/><path d="${d}" fill="none" stroke="${run>=0?'#166534':'#991b1b'}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    if(window.gammaAnimating){
+      el.classList.remove('gamma-map-animate');
+      void el.offsetWidth;
+      el.classList.add('gamma-map-animate');
+      window.gammaAnimating=false;
+    }document.getElementById('equity-meta').textContent=(run>=0?'+':'')+run.toFixed(2)+'R'}
 
 function setTextSafe(id,value){const el=document.getElementById(id);if(el)el.textContent=value}
 function asNum(v){
@@ -1662,14 +1689,27 @@ function convertQqqLevelToNq(qqqLevel, qqqSpot, nqSpot){
   // Better than a fixed multiplier: convert percentage distance from QQQ spot into NQ points.
   return nqSpot + ((qqqLevel - qqqSpot) / qqqSpot) * nqSpot;
 }
+function getFlowChartsRatio(){
+  const saved=asNum(localStorage.getItem('flowcharts_qqq_nq_ratio'));
+  // FreeFlow-only mode: this ratio is the QQQ→NQ futures scale factor.
+  // Change it from Settings/console later if needed: localStorage.setItem('flowcharts_qqq_nq_ratio','41.2')
+  return (Number.isFinite(saved) && saved>20 && saved<70) ? saved : 41.2;
+}
+function convertQqqLevelToNq(qqqLevel, qqqSpot, nqSpot){
+  qqqLevel=asNum(qqqLevel); qqqSpot=asNum(qqqSpot); nqSpot=asNum(nqSpot);
+  if(!Number.isFinite(qqqLevel)) return null;
+  if(qqqLevel>10000 && qqqLevel<50000) return qqqLevel;
+  if(!Number.isFinite(qqqSpot) || !Number.isFinite(nqSpot) || qqqSpot<=0) return null;
+  return nqSpot + ((qqqLevel - qqqSpot) / qqqSpot) * nqSpot;
+}
 function getTransferredLevels(j){
   const g=j||{};
   const qqqSpot=asNum(g.qqqSpot ?? g.qqq_spot ?? g.spot ?? g.underlying_price ?? g.snapshot?.spot) || 674.18;
+  const ratio=getFlowChartsRatio();
 
-  const manualOverride=asNum(localStorage.getItem('flowcharts_nq_spot_override'));
-  const apiNq=asNum(g.nqSpot ?? g.nq_spot ?? g.nq_ref ?? g.nqRef ?? g.nq_reference ?? g.nqReference ?? g.nq);
-  let nqRef=manualOverride || apiNq;
-  if(!Number.isFinite(nqRef) || nqRef<10000 || nqRef>50000) nqRef = qqqSpot * 41.2;
+  // FreeFlow-only spot estimate. No Yahoo/third-party quote.
+  // Uses QQQ spot from FreeFlow as the live anchor.
+  const nqRef=qqqSpot * ratio;
 
   let call=wallLevel(g.callWall ?? g.call_wall ?? g.walls?.call_wall ?? g.call_wall_price);
   let put=wallLevel(g.putWall ?? g.put_wall ?? g.walls?.put_wall ?? g.put_wall_price);
@@ -1685,8 +1725,11 @@ function getTransferredLevels(j){
   if(!sane(flip)) flip = nqRef - 35;
 
   return {
-    call, put, flip, spot:nqRef, qqqSpot, ratio:nqRef/qqqSpot,
-    spotSource: manualOverride ? 'Manual override' : (apiNq ? (g.nqQuoteSource || 'NQ quote API') : 'QQQ ratio fallback')
+    call, put, flip,
+    spot:nqRef,
+    qqqSpot,
+    ratio,
+    spotSource:'FreeFlow QQQ spot × QQQ→NQ ratio'
   };
 }
 function closestGammaLabel(lv){
@@ -1988,25 +2031,19 @@ function setGammaExpiration(v){
     const el=document.getElementById('gamma-expiration');
     if(el && el.value !== String(v)) el.value=String(v);
     window.__pendingGammaExpiration=String(v);
-    if(typeof loadGamma==='function') loadGamma();
+    if(typeof loadGamma==='function') loadGamma({animate:true});
     else if(typeof renderGamma==='function') renderGamma();
   }catch(e){ if(typeof showError==='function') showError('Gamma Expiration Error', e.message||String(e)); }
 }
-function setGammaColorMode(v){
-  try{
-    const el=document.getElementById('gamma-color-mode');
-    if(el && el.value !== String(v)) el.value=String(v);
-    window.__pendingGammaColorMode=String(v);
-    if(typeof renderGamma==='function') renderGamma();
-  }catch(e){ if(typeof showError==='function') showError('Gamma Color Error', e.message||String(e)); }
-}
+function setGammaColorMode(v){renderGamma();}
 window.setGammaExpiration=setGammaExpiration;
 window.setGammaColorMode=setGammaColorMode;
 
-async function loadGamma(){
+async function loadGamma(opts={}){
   const status=document.getElementById('gamma-status');
   const strip=document.getElementById('gamma-status-strip');
   if(status) status.textContent='Loading...';
+  window.gammaAnimating = Boolean(opts && opts.animate);
   if(strip) strip.textContent='Status: Loading FreeFlow API · Chart: full 2D GEX map';
   try{
     const expSel=document.getElementById('gamma-expiration');
@@ -2035,7 +2072,7 @@ async function loadGamma(){
     window.gammaData=best;
     if(typeof setApiDot==='function')setApiDot('freeflow','ok');
     if(status)status.textContent='Live / API connected';
-    if(strip){const lvTmp=getTransferredLevels(best);strip.textContent='Status: API connected · NQ spot: '+fmtLevel(lvTmp.spot)+' ('+lvTmp.spotSource+') · Updated '+new Date().toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});}
+    if(strip){const lvTmp=getTransferredLevels(best);strip.textContent='Status: API connected · FreeFlow-only · NQ estimate: '+fmtLevel(lvTmp.spot)+' · Ratio '+lvTmp.ratio.toFixed(4)+' · Updated '+new Date().toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});}
     updateGammaCards(best);
     renderGamma();
   }catch(e){
@@ -2052,7 +2089,7 @@ async function loadGamma(){
 
 function loadSettings(){try{settings=JSON.parse(localStorage.getItem('nq_settings')||'{}')}catch{settings={}};applySettings()}
 function saveSetting(k,v){settings[k]=v;localStorage.setItem('nq_settings',JSON.stringify(settings));applySettings()}
-function applySettings(){let vals={sname:'s-name'};document.getElementById('s-name').value=settings.traderName||'Jeremiah';document.getElementById('s-account').value=settings.accountSize||'50000';document.getElementById('s-prime').value=settings.primeSt||'06:45';document.getElementById('s-good').value=settings.goodSt||'07:45';document.getElementById('s-end').value=settings.endSt||'10:30';document.getElementById('toggle-sound').classList.toggle('on',localStorage.getItem('nq_sound')!=='off');updateStatusBar()}
+function applySettings(){let vals={sname:'s-name'};document.getElementById('s-name').value=settings.traderName||'Jeremiah';document.getElementById('s-account').value=settings.accountSize||'50000';document.getElementById('s-prime').value=settings.primeSt||'06:45';document.getElementById('s-good').value=settings.goodSt||'07:45';document.getElementById('s-end').value=settings.endSt||'10:30'; const ratioInput=document.getElementById('s-qqq-nq-ratio'); if(ratioInput)ratioInput.value=localStorage.getItem('flowcharts_qqq_nq_ratio')||'41.2';document.getElementById('toggle-sound').classList.toggle('on',localStorage.getItem('nq_sound')!=='off');updateStatusBar()}
 function testConn(){loadTrades()} function clearLocal(){if(confirm('Delete local fallback trades?')){localStorage.removeItem('nq_local_trades');toast('Local trades cleared','green')}}
 function loadAudioSettings(){try{audioTracks=JSON.parse(localStorage.getItem('nq_audio')||'[]')}catch{audioTracks=[]}renderAudioList();document.getElementById('toggle-sound').classList.toggle('on',localStorage.getItem('nq_sound')!=='off')}
 function toggleSound(){let on=localStorage.getItem('nq_sound')!=='off';localStorage.setItem('nq_sound',on?'off':'on');loadAudioSettings()}
