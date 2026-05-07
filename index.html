@@ -864,6 +864,16 @@ html,body{background:linear-gradient(115deg,#fbfaf7 0%,#f5f3ee 52%,#eef0f4 100%)
 </style>
 
 <style id="gamma-defined-final-css">#gamma-chart{background:#fbfaf7!important;min-height:610px!important;height:610px!important;display:block!important}.svg-gex-chart{width:100%;height:610px;display:block}</style>
+
+<style id="premium-gamma-chart-fix">
+#gamma-chart{background:#fbfaf7!important;min-height:650px!important;height:650px!important;display:block!important}
+.svg-gex-chart{width:100%;height:650px;display:block}
+.gamma-map-wrap{min-height:650px!important;background:linear-gradient(180deg,#fff,#fbfaf7)!important}
+.gamma-chart-card{overflow:visible!important}
+.gamma-chart-head h2{letter-spacing:-.8px!important}
+.gamma-status-strip{font-weight:900!important;color:#6b6560!important}
+</style>
+
 </head>
 <body>
 <div id="error-stack" aria-live="polite"></div>
@@ -1558,7 +1568,14 @@ function compactNum(v){
   if(a>=1e3)return s+(a/1e3).toFixed(1)+'K';
   return s+a.toFixed(0);
 }
-function wallLevel(v){return asNum(v?.nqLevel ?? v?.level ?? v?.strike ?? v)}
+function wallLevel(v){
+  if(v==null) return null;
+  if(typeof v==='object'){
+    // Only price/strike fields are valid levels. Never use exposure as a level.
+    return asNum(v.nqLevel ?? v.level ?? v.strike ?? v.price ?? v.wall ?? v.value_price);
+  }
+  return asNum(v);
+}
 function mockGammaData(){
   return {
     nqRef:27906, qqqSpot:674.18, net_gex:650000000, total_gex:650000000, total_dex:5100000000,
@@ -1576,16 +1593,26 @@ function mockGammaData(){
 function getContracts(g){return g?.contracts || g?.strikes || g?.snapshot?.contracts || g?.data?.contracts || g?.rows || []}
 function getTransferredLevels(j){
   const g=j||{};
-  const qqqSpot=asNum(g.qqqSpot ?? g.qqq_spot ?? g.spot ?? g.underlying_price) || 674.18;
-  const nqRef=asNum(g.nqSpot ?? g.nq_ref ?? g.nqRef ?? g.nq_reference ?? g.nqReference) || 27906;
+  const qqqSpot=asNum(g.qqqSpot ?? g.qqq_spot ?? g.spot ?? g.underlying_price ?? g.snapshot?.spot) || 674.18;
+  const nqRef=asNum(g.nqSpot ?? g.nq_ref ?? g.nqRef ?? g.nq_reference ?? g.nqReference ?? g.nq) || 27906;
   const ratio = qqqSpot ? nqRef / qqqSpot : 41.39;
-  let call=wallLevel(g.callWall ?? g.call_wall ?? g.call_wall_price);
-  let put=wallLevel(g.putWall ?? g.put_wall ?? g.put_wall_price);
-  let flip=wallLevel(g.gammaFlip ?? g.gamma_flip ?? g.zero_gamma ?? g.flip);
-  if(call && call < 1000) call*=ratio;
-  if(put && put < 1000) put*=ratio;
-  if(flip && flip < 1000) flip*=ratio;
-  return {call:asNum(call)||27939, put:asNum(put)||26491, flip:asNum(flip)||27526, spot:nqRef, qqqSpot, ratio};
+
+  let call=wallLevel(g.callWall ?? g.call_wall ?? g.walls?.call_wall ?? g.call_wall_price);
+  let put=wallLevel(g.putWall ?? g.put_wall ?? g.walls?.put_wall ?? g.put_wall_price);
+  let flip=wallLevel(g.gammaFlip ?? g.gamma_flip ?? g.walls?.gamma_flip ?? g.zero_gamma ?? g.flip);
+
+  // If the API returns QQQ strikes, map to NQ. If it already returns NQ-size values, keep them.
+  if(call && Math.abs(call) < 1000) call*=ratio;
+  if(put && Math.abs(put) < 1000) put*=ratio;
+  if(flip && Math.abs(flip) < 1000) flip*=ratio;
+
+  // Guard against accidentally using exposure as a price level.
+  const sane=(x)=>Number.isFinite(x) && x>10000 && x<50000;
+  if(!sane(call)) call = nqRef + 350;
+  if(!sane(put)) put = nqRef - 350;
+  if(!sane(flip)) flip = nqRef - 35;
+
+  return {call, put, flip, spot:nqRef, qqqSpot, ratio};
 }
 function closestGammaLabel(lv){
   const arr=[['Call Wall',lv.call],['Put Wall',lv.put],['Gamma Flip',lv.flip]].filter(x=>Number.isFinite(x[1]));
@@ -1630,6 +1657,7 @@ function gammaRows(g,lv){
     let level=asNum(c.nqLevel ?? c.level ?? c.nq_price ?? c.nqPrice);
     if(level==null && q!=null) level = q<1000 ? q*lv.ratio : q;
     if(level==null) return;
+    if(!(Number.isFinite(level) && level>10000 && level<50000)) return;
     let gex=asNum(c.gex ?? c.gamma_exposure ?? c.exposure);
     if(gex==null || Math.abs(gex)<1) gex=(asNum(c.gamma)||0)*(asNum(c.oi)||0)*1000000;
     rows.push({level,gex:gex||0,oi:asNum(c.oi)||0,dex:asNum(c.dex)||0});
@@ -1653,16 +1681,83 @@ function renderGamma(){
     const lv=getTransferredLevels(g);
     updateGammaCards(g);
     const rows=gammaRows(g,lv);
-    const levels=[lv.spot,lv.call,lv.put,lv.flip,...rows.map(r=>r.level)].filter(Number.isFinite);
-    const min=Math.min(...levels)-150,max=Math.max(...levels)+150;
-    let maxAbs=Math.max(...rows.map(r=>Math.abs(r.gex)),1); if(maxAbs<100)maxAbs=100;
-    const W=980,H=610,ml=96,mr=168,mt=30,mb=62,plotW=W-ml-mr,plotH=H-mt-mb,x0=ml+plotW/2;
-    const xScale=v=>x0+(v/(maxAbs*1.25))*(plotW/2), yScale=v=>mt+(max-v)/(max-min)*plotH;
-    const barH=Math.max(8,Math.min(18,plotH/Math.max(rows.length,1)*.62));
-    const gridY=Array.from({length:7},(_,i)=>min+(max-min)*i/6),gridX=[-maxAbs,-maxAbs*.5,0,maxAbs*.5,maxAbs];
-    const zone=(v,label,color,solid=false)=>{if(!Number.isFinite(v))return'';const y=yScale(v),y1=yScale(v+15),y2=yScale(v-15);return `<g><rect x="${ml}" y="${y1}" width="${plotW}" height="${Math.max(2,y2-y1)}" rx="8" fill="${color}" opacity=".07"/><line x1="${ml}" x2="${ml+plotW}" y1="${y}" y2="${y}" stroke="${color}" stroke-width="2.5" ${solid?'':'stroke-dasharray="8 7"'}/><rect x="${ml+plotW+8}" y="${y-16}" width="150" height="30" rx="10" fill="rgba(255,255,255,.94)" stroke="${color}"/><text x="${ml+plotW+18}" y="${y+4}" font-size="12" font-weight="900" fill="${color}">${label} ${fmtLevel(v)}</text></g>`};
-    const bars=rows.map(r=>{let v=r.gex||0;if(v===0)v=maxAbs*.05;if(Math.abs(v)<maxAbs*.075)v=Math.sign(v||1)*maxAbs*.075;const y=yScale(r.level)-barH/2,x=v>=0?x0:xScale(v),w=Math.max(Math.abs(xScale(v)-x0),5),color=r.gex>=0?'rgba(20,184,166,.88)':'rgba(239,105,80,.88)';return `<g><title>NQ Zone: ${fmtLevel(r.level)}\nGEX: ${compactNum(r.gex)}\nDEX: ${compactNum(r.dex)}\nOI: ${fmtLevel(r.oi)}\nRows: ${r.count}</title><rect x="${x}" y="${y}" width="${w}" height="${barH}" rx="5" fill="${color}" stroke="rgba(17,24,39,.14)"/></g>`}).join('');
-    el.innerHTML=`<svg class="svg-gex-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="2D NQ gamma map"><rect x="${ml}" y="${mt}" width="${plotW}" height="${plotH}" rx="18" fill="rgba(255,255,255,.72)" stroke="rgba(17,24,39,.08)"/>${gridY.map(v=>`<g><line x1="${ml}" x2="${ml+plotW}" y1="${yScale(v)}" y2="${yScale(v)}" stroke="rgba(148,163,184,.28)"/><text x="${ml-12}" y="${yScale(v)+4}" text-anchor="end" font-size="12" font-weight="800" fill="#475569">${fmtLevel(v)}</text></g>`).join('')}${gridX.map(v=>`<g><line x1="${xScale(v)}" x2="${xScale(v)}" y1="${mt}" y2="${mt+plotH}" stroke="${v===0?'rgba(17,24,39,.45)':'rgba(148,163,184,.22)'}" stroke-width="${v===0?2:1}"/><text x="${xScale(v)}" y="${mt+plotH+26}" text-anchor="middle" font-size="12" font-weight="800" fill="#475569">${compactNum(v)}</text></g>`).join('')}${zone(lv.spot,'NQ Spot','#facc15',true)}${zone(lv.call,'Call Wall','#087a50')}${zone(lv.flip,'Gamma Flip','#6d28d9')}${zone(lv.put,'Put Wall','#a11d1d')}${bars}<text x="${ml+plotW/2}" y="${H-14}" text-anchor="middle" font-size="13" font-weight="950" fill="#334155">GEX / Pressure</text><text x="24" y="${mt+plotH/2}" text-anchor="middle" transform="rotate(-90 24 ${mt+plotH/2})" font-size="13" font-weight="950" fill="#334155">NQ Zones</text></svg>`;
+
+    const levels=[lv.spot,lv.call,lv.put,lv.flip,...rows.map(r=>r.level)]
+      .filter(v=>Number.isFinite(v) && v>10000 && v<50000);
+
+    const min=Math.min(...levels)-150;
+    const max=Math.max(...levels)+150;
+    let maxAbs=Math.max(...rows.map(r=>Math.abs(r.gex)),1);
+    if(maxAbs<100)maxAbs=100;
+
+    const W=1100,H=650,ml=112,mr=190,mt=36,mb=72;
+    const plotW=W-ml-mr,plotH=H-mt-mb,x0=ml+plotW/2;
+    const xScale=v=>x0+(v/(maxAbs*1.20))*(plotW/2);
+    const yScale=v=>mt+(max-v)/(max-min)*plotH;
+    const barH=Math.max(7,Math.min(18,plotH/Math.max(rows.length,1)*.58));
+    const gridY=Array.from({length:8},(_,i)=>min+(max-min)*i/7);
+    const gridX=[-maxAbs,-maxAbs*.5,0,maxAbs*.5,maxAbs];
+
+    const zone=(v,label,color,solid=false)=>{
+      if(!Number.isFinite(v))return'';
+      const y=yScale(v), y1=yScale(v+15), y2=yScale(v-15);
+      return `<g>
+        <rect x="${ml}" y="${y1}" width="${plotW}" height="${Math.max(2,y2-y1)}" rx="8" fill="${color}" opacity=".065"/>
+        <line x1="${ml}" x2="${ml+plotW}" y1="${y}" y2="${y}" stroke="${color}" stroke-width="2.4" ${solid?'':'stroke-dasharray="8 8"'}/>
+        <rect x="${ml+plotW+10}" y="${y-16}" width="165" height="32" rx="12" fill="rgba(255,255,255,.96)" stroke="${color}" stroke-width="1.4"/>
+        <text x="${ml+plotW+22}" y="${y+5}" font-size="12" font-weight="900" fill="${color}">${label} ${fmtLevel(v)}</text>
+      </g>`;
+    };
+
+    const bars=rows
+      .filter(r=>Number.isFinite(r.level) && r.level>min && r.level<max)
+      .map(r=>{
+        let v=r.gex||0;
+        if(v===0)v=maxAbs*.04;
+        if(Math.abs(v)<maxAbs*.055)v=Math.sign(v||1)*maxAbs*.055;
+        const y=yScale(r.level)-barH/2;
+        const x=v>=0?x0:xScale(v);
+        const w=Math.max(Math.abs(xScale(v)-x0),4);
+        const color=r.gex>=0?'rgba(15,143,107,.84)':'rgba(216,76,59,.84)';
+        const stroke=r.gex>=0?'rgba(15,143,107,1)':'rgba(185,28,28,1)';
+        return `<g>
+          <title>NQ Zone: ${fmtLevel(r.level)}\nGEX: ${compactNum(r.gex)}\nDEX: ${compactNum(r.dex)}\nOI: ${fmtLevel(r.oi)}\nRows: ${r.count}</title>
+          <rect x="${x}" y="${y}" width="${w}" height="${barH}" rx="6" fill="${color}" stroke="${stroke}" stroke-opacity=".35"/>
+        </g>`;
+      }).join('');
+
+    el.innerHTML=`<svg class="svg-gex-chart premium-gex-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Premium 2D NQ gamma map">
+      <defs>
+        <linearGradient id="chartBg" x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0%" stop-color="#ffffff"/>
+          <stop offset="100%" stop-color="#fbfaf7"/>
+        </linearGradient>
+        <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#1a1814" flood-opacity=".08"/>
+        </filter>
+      </defs>
+      <rect x="${ml}" y="${mt}" width="${plotW}" height="${plotH}" rx="22" fill="url(#chartBg)" stroke="rgba(26,24,18,.10)" filter="url(#softShadow)"/>
+      ${gridY.map(v=>`<g>
+        <line x1="${ml}" x2="${ml+plotW}" y1="${yScale(v)}" y2="${yScale(v)}" stroke="rgba(71,85,105,.14)"/>
+        <text x="${ml-14}" y="${yScale(v)+4}" text-anchor="end" font-size="12" font-weight="900" fill="#475569">${fmtLevel(v)}</text>
+      </g>`).join('')}
+      ${gridX.map(v=>`<g>
+        <line x1="${xScale(v)}" x2="${xScale(v)}" y1="${mt}" y2="${mt+plotH}" stroke="${v===0?'rgba(17,24,39,.48)':'rgba(71,85,105,.12)'}" stroke-width="${v===0?2.3:1}"/>
+        <text x="${xScale(v)}" y="${mt+plotH+30}" text-anchor="middle" font-size="12" font-weight="900" fill="#475569">${compactNum(v)}</text>
+      </g>`).join('')}
+      ${bars}
+      ${zone(lv.spot,'NQ Spot','#facc15',true)}
+      ${zone(lv.call,'Call Wall','#087a50')}
+      ${zone(lv.flip,'Gamma Flip','#7c3aed')}
+      ${zone(lv.put,'Put Wall','#b91c1c')}
+      <text x="${ml+plotW/2}" y="${H-18}" text-anchor="middle" font-size="14" font-weight="950" fill="#334155">GEX / Pressure</text>
+      <text x="28" y="${mt+plotH/2}" text-anchor="middle" transform="rotate(-90 28 ${mt+plotH/2})" font-size="14" font-weight="950" fill="#334155">NQ Zones</text>
+      <g transform="translate(${ml},${mt-14})">
+        <circle cx="0" cy="0" r="5" fill="#087a50"/><text x="12" y="4" font-size="12" font-weight="900" fill="#6b6560">+GEX</text>
+        <circle cx="70" cy="0" r="5" fill="#d84c3b"/><text x="82" y="4" font-size="12" font-weight="900" fill="#6b6560">-GEX</text>
+        <circle cx="140" cy="0" r="5" fill="#facc15"/><text x="152" y="4" font-size="12" font-weight="900" fill="#6b6560">NQ Spot</text>
+      </g>
+    </svg>`;
   }catch(e){console.error(e);if(typeof showError==='function')showError('Gamma Render Error',e.message)}
 }
 
