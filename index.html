@@ -883,6 +883,13 @@ html,body{background:linear-gradient(115deg,#fbfaf7 0%,#f5f3ee 52%,#eef0f4 100%)
 .gamma-status-strip{font-weight:900!important;color:#6b6560!important}
 </style>
 
+
+<style id="gamma-range-zoom-crosshair-css">
+.gamma-controls{grid-template-columns:repeat(6,minmax(120px,1fr))!important;align-items:end}
+#gamma-chart svg{cursor:crosshair}
+@media(max-width:1200px){.gamma-controls{grid-template-columns:repeat(3,minmax(120px,1fr))!important}}
+</style>
+
 </head>
 <body>
 
@@ -1647,30 +1654,30 @@ function getContracts(g){
   }
   return [];
 }
+function convertQqqLevelToNq(qqqLevel, qqqSpot, nqSpot){
+  qqqLevel=asNum(qqqLevel); qqqSpot=asNum(qqqSpot); nqSpot=asNum(nqSpot);
+  if(!Number.isFinite(qqqLevel)) return null;
+  if(qqqLevel>10000 && qqqLevel<50000) return qqqLevel; // already NQ-sized
+  if(!Number.isFinite(qqqSpot) || !Number.isFinite(nqSpot) || qqqSpot<=0) return null;
+  // Better than a fixed multiplier: convert percentage distance from QQQ spot into NQ points.
+  return nqSpot + ((qqqLevel - qqqSpot) / qqqSpot) * nqSpot;
+}
 function getTransferredLevels(j){
   const g=j||{};
   const qqqSpot=asNum(g.qqqSpot ?? g.qqq_spot ?? g.spot ?? g.underlying_price ?? g.snapshot?.spot) || 674.18;
 
-  // Best NQ source: backend quote from /api/freeflow using NQ=F.
-  // Optional manual emergency override: localStorage.flowcharts_nq_spot_override.
   const manualOverride=asNum(localStorage.getItem('flowcharts_nq_spot_override'));
   const apiNq=asNum(g.nqSpot ?? g.nq_spot ?? g.nq_ref ?? g.nqRef ?? g.nq_reference ?? g.nqReference ?? g.nq);
   let nqRef=manualOverride || apiNq;
-
-  // Last resort only: estimate using a recent normal ratio, but do not lock it forever.
-  if(!Number.isFinite(nqRef) || nqRef<10000 || nqRef>50000){
-    nqRef = qqqSpot * 41.2;
-  }
-
-  const ratio = qqqSpot ? nqRef / qqqSpot : 41.2;
+  if(!Number.isFinite(nqRef) || nqRef<10000 || nqRef>50000) nqRef = qqqSpot * 41.2;
 
   let call=wallLevel(g.callWall ?? g.call_wall ?? g.walls?.call_wall ?? g.call_wall_price);
   let put=wallLevel(g.putWall ?? g.put_wall ?? g.walls?.put_wall ?? g.put_wall_price);
   let flip=wallLevel(g.gammaFlip ?? g.gamma_flip ?? g.walls?.gamma_flip ?? g.zero_gamma ?? g.flip);
 
-  if(call && Math.abs(call) < 1000) call*=ratio;
-  if(put && Math.abs(put) < 1000) put*=ratio;
-  if(flip && Math.abs(flip) < 1000) flip*=ratio;
+  call=convertQqqLevelToNq(call, qqqSpot, nqRef);
+  put=convertQqqLevelToNq(put, qqqSpot, nqRef);
+  flip=convertQqqLevelToNq(flip, qqqSpot, nqRef);
 
   const sane=(x)=>Number.isFinite(x) && x>10000 && x<50000;
   if(!sane(call)) call = nqRef + 350;
@@ -1678,7 +1685,7 @@ function getTransferredLevels(j){
   if(!sane(flip)) flip = nqRef - 35;
 
   return {
-    call, put, flip, spot:nqRef, qqqSpot, ratio,
+    call, put, flip, spot:nqRef, qqqSpot, ratio:nqRef/qqqSpot,
     spotSource: manualOverride ? 'Manual override' : (apiNq ? (g.nqQuoteSource || 'NQ quote API') : 'QQQ ratio fallback')
   };
 }
@@ -1724,7 +1731,7 @@ function gammaRows(g,lv){
   contracts.forEach(c=>{
     let q=asNum(c.strike ?? c.qqqStrike ?? c.rawStrike ?? c.qqqLevel);
     let level=asNum(c.nqLevel ?? c.level ?? c.nq_price ?? c.nqPrice);
-    if(level==null && q!=null) level = q<1000 ? q*lv.ratio : q;
+    if(level==null && q!=null) level = convertQqqLevelToNq(q, lv.qqqSpot, lv.spot);
     if(level==null) return;
     if(!(Number.isFinite(level) && level>10000 && level<50000)) return;
 
@@ -1790,13 +1797,28 @@ function renderGamma(){
     const g=window.gammaData||mockGammaData();
     const lv=getTransferredLevels(g);
     updateGammaCards(g);
-    const rows=gammaRows(g,lv);
+    let rows=gammaRows(g,lv);
+    const rangePct=getGammaRangePercentSetting();
+    const rangePts=getGammaRangePointsFromSpot(lv.spot);
+    if(Number.isFinite(rangePts)){
+      const keepLevel=(x)=>Math.abs(x-lv.spot)<=rangePts || Math.abs(x-lv.call)<=35 || Math.abs(x-lv.put)<=35 || Math.abs(x-lv.flip)<=35;
+      rows=rows.filter(r=>keepLevel(r.level));
+    }
 
-    const levels=[lv.spot,lv.call,lv.put,lv.flip,...rows.map(r=>r.level)]
+    const zoom=getGammaZoomSetting();
+    const baseLevels=[lv.spot,lv.call,lv.put,lv.flip,...rows.map(r=>r.level)]
       .filter(v=>Number.isFinite(v) && v>10000 && v<50000);
-
-    const min=Math.min(...levels)-100;
-    const max=Math.max(...levels)+100;
+    let min,max;
+    if(Number.isFinite(rangePts)){
+      const half=rangePts/zoom;
+      min=lv.spot-half;
+      max=lv.spot+half;
+      const important=[lv.call,lv.put,lv.flip].filter(v=>Number.isFinite(v)&&Math.abs(v-lv.spot)<=rangePts);
+      if(important.length){min=Math.min(min,...important)-60;max=Math.max(max,...important)+60;}
+    }else{
+      min=Math.min(...baseLevels)-100;
+      max=Math.max(...baseLevels)+100;
+    }
     let maxAbs=Math.max(...rows.map(r=>Math.abs(r.gex)),1);
     if(maxAbs<100)maxAbs=100;
 
@@ -1838,14 +1860,15 @@ function renderGamma(){
         </g>`;
       }).join('');
 
+    const rangeLabel=Number.isFinite(rangePct)?`±${rangePct}% (${Math.round(rangePts)} pts)`:'All';
     const infoText = rows.length>3
-      ? `${rows.length} strike zones loaded`
+      ? `${rows.length} zones · ${rangeLabel} · Zoom ${zoom}x`
       : `Wall zones only · snapshot rows unavailable`;
 
     el.style.height=H+'px';
     const wrap=el.closest('.gamma-map-wrap'); if(wrap)wrap.style.minHeight=H+'px';
 
-    el.innerHTML=`<svg class="svg-gex-chart premium-gex-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Full 2D NQ gamma map">
+    el.innerHTML=`<svg class="svg-gex-chart premium-gex-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Full 2D NQ gamma map" data-ml="${ml}" data-mr="${mr}" data-mt="${mt}" data-mb="${mb}" data-w="${W}" data-h="${H}" data-min="${min}" data-max="${max}" data-maxabs="${maxAbs}" onmousemove="handleGammaCrosshair(event)" onmouseleave="hideGammaCrosshair(event)">
       <defs>
         <linearGradient id="chartBgFull" x1="0" x2="1" y1="0" y2="1">
           <stop offset="0%" stop-color="#ffffff"/>
@@ -1865,6 +1888,12 @@ function renderGamma(){
         <text x="${xScale(v)}" y="${mt+plotH+32}" text-anchor="middle" font-size="12" font-weight="900" fill="#475569">${compactNum(v)}</text>
       </g>`).join('')}
       ${bars}
+      <g id="gamma-crosshair-layer" style="display:none">
+        <line id="gamma-crosshair-x" x1="${ml}" x2="${ml+plotW}" y1="${mt}" y2="${mt}" stroke="#111827" stroke-width="1.2" stroke-dasharray="4 5" opacity=".70"/>
+        <line id="gamma-crosshair-y" x1="${x0}" x2="${x0}" y1="${mt}" y2="${mt+plotH}" stroke="#111827" stroke-width="1.2" stroke-dasharray="4 5" opacity=".70"/>
+        <rect id="gamma-crosshair-label-bg" x="${ml+10}" y="${mt+10}" width="210" height="46" rx="12" fill="rgba(255,255,255,.94)" stroke="rgba(17,24,39,.15)"/>
+        <text id="gamma-crosshair-label" x="${ml+22}" y="${mt+38}" font-size="12" font-weight="900" fill="#111827">Move mouse over chart</text>
+      </g>
       ${zone(lv.spot,'NQ Spot','#facc15',true)}
       ${zone(lv.call,'Call Wall','#087a50')}
       ${zone(lv.flip,'Gamma Flip','#7c3aed')}
@@ -1885,6 +1914,74 @@ function renderGamma(){
     }
   }catch(e){console.error(e);if(typeof showError==='function')showError('Gamma Render Error',e.message)}
 }
+
+function handleGammaCrosshair(evt){
+  try{
+    if(localStorage.getItem('flowcharts_gamma_crosshair')==='off')return;
+    const svg=evt.currentTarget;
+    const pt=svg.createSVGPoint();
+    pt.x=evt.clientX; pt.y=evt.clientY;
+    const p=pt.matrixTransform(svg.getScreenCTM().inverse());
+    const ml=Number(svg.dataset.ml), mt=Number(svg.dataset.mt), W=Number(svg.dataset.w), H=Number(svg.dataset.h), mr=Number(svg.dataset.mr), mb=Number(svg.dataset.mb);
+    const min=Number(svg.dataset.min), max=Number(svg.dataset.max), maxAbs=Number(svg.dataset.maxabs);
+    const plotW=W-ml-mr, plotH=H-mt-mb, x0=ml+plotW/2;
+    if(p.x<ml||p.x>ml+plotW||p.y<mt||p.y>mt+plotH){hideGammaCrosshair(evt);return}
+    const price=max-((p.y-mt)/plotH)*(max-min);
+    const gex=((p.x-x0)/(plotW/2))*(maxAbs*1.18);
+    const layer=svg.querySelector('#gamma-crosshair-layer');
+    const lx=svg.querySelector('#gamma-crosshair-x');
+    const ly=svg.querySelector('#gamma-crosshair-y');
+    const lab=svg.querySelector('#gamma-crosshair-label');
+    const bg=svg.querySelector('#gamma-crosshair-label-bg');
+    if(layer)layer.style.display='block';
+    if(lx){lx.setAttribute('y1',p.y);lx.setAttribute('y2',p.y)}
+    if(ly){ly.setAttribute('x1',p.x);ly.setAttribute('x2',p.x)}
+    const labelX=Math.min(Math.max(p.x+12,ml+10),ml+plotW-220);
+    const labelY=Math.min(Math.max(p.y-58,mt+10),mt+plotH-56);
+    if(bg){bg.setAttribute('x',labelX);bg.setAttribute('y',labelY)}
+    if(lab){lab.setAttribute('x',labelX+12);lab.setAttribute('y',labelY+29);lab.textContent=`NQ ${fmtLevel(price)} · GEX ${compactNum(gex)}`}
+  }catch(e){}
+}
+function hideGammaCrosshair(evt){
+  try{const layer=evt.currentTarget.querySelector('#gamma-crosshair-layer'); if(layer)layer.style.display='none'}catch(e){}
+}
+window.handleGammaCrosshair=handleGammaCrosshair;
+window.hideGammaCrosshair=hideGammaCrosshair;
+
+function getGammaRangePercentSetting(){
+  const v=document.getElementById('gamma-range-percent')?.value || localStorage.getItem('flowcharts_gamma_range_percent') || '1';
+  return v==='all' ? Infinity : Number(v||1);
+}
+function getGammaRangePointsFromSpot(spot){
+  const pct=getGammaRangePercentSetting();
+  if(!Number.isFinite(pct)) return Infinity;
+  return Math.max(25, Number(spot||0) * (pct/100));
+}
+function setGammaRange(v){ setGammaRangePercent(v); }
+window.setGammaRange=setGammaRange;
+function getGammaZoomSetting(){
+  const v=Number(document.getElementById('gamma-zoom-level')?.value || localStorage.getItem('flowcharts_gamma_zoom') || 1);
+  return Number.isFinite(v) && v>0 ? v : 1;
+}
+function setGammaRangePercent(v){
+  localStorage.setItem('flowcharts_gamma_range_percent',String(v));
+  renderGamma();
+}
+window.setGammaRangePercent=setGammaRangePercent;
+function setGammaZoom(v){
+  localStorage.setItem('flowcharts_gamma_zoom',String(v));
+  renderGamma();
+}
+function toggleGammaCrosshair(){
+  const on=localStorage.getItem('flowcharts_gamma_crosshair')!=='off';
+  localStorage.setItem('flowcharts_gamma_crosshair',on?'off':'on');
+  const b=document.getElementById('gamma-crosshair-btn');
+  if(b)b.textContent=on?'Crosshair Off':'Crosshair On';
+  renderGamma();
+}
+window.setGammaRangePercent=setGammaRangePercent;
+window.setGammaZoom=setGammaZoom;
+window.toggleGammaCrosshair=toggleGammaCrosshair;
 
 function setGammaExpiration(v){
   try{
