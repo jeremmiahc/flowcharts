@@ -772,6 +772,13 @@ html,body{background:linear-gradient(115deg,#fbfaf7 0%,#f5f3ee 52%,#eef0f4 100%)
 @keyframes errorIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
 </style>
 
+
+<style id="svg-gamma-final-fix">
+#gamma-chart{background:#fbfaf7!important;min-height:610px!important;height:610px!important;display:block!important}
+.svg-gex-chart{width:100%;height:610px;display:block}
+.gamma-chart-head .eyebrow{color:var(--text3)!important}
+</style>
+
 </head>
 <body>
 <div id="error-stack" aria-live="polite"></div>
@@ -941,9 +948,7 @@ html,body{background:linear-gradient(115deg,#fbfaf7 0%,#f5f3ee 52%,#eef0f4 100%)
                 <option value="heatmap">Heatmap</option><option value="contrast">Contrast</option><option value="iceberg">Iceberg</option>
                 <option value="liquidity">Liquidity</option><option value="mono">Monochrome Pro</option>
               </select></label>
-          <label class="chart-type-field"><span>Chart</span><select id="gamma-chart-type" onchange="setGammaChartType('bars')">
-            <option value="bars">2D GEX by Strike</option>
-          </select></label>
+          
               <button class="control-btn primary" id="gamma-reload-btn" onclick="loadGamma()">Reload</button>
               
             </div>
@@ -1315,130 +1320,200 @@ function openCalendarDay(date){
   },60);
 }
 function renderEquity(){let el=document.getElementById('equity-svg'),rs=trades.filter(t=>t.r_result!=null).slice().reverse();if(rs.length<2){el.innerHTML='<div class="muted">Log at least 2 trades to see your curve</div>';return}let vals=[0],run=0;rs.forEach(t=>{run+=t.r_result;vals.push(run)});let max=Math.max(...vals),min=Math.min(...vals),range=max-min||1,W=900,H=230,pad=28;let sx=i=>pad+i/(vals.length-1)*(W-pad*2),sy=v=>pad+(H-pad*2)-(v-min)/range*(H-pad*2);let d='M'+sx(0)+','+sy(vals[0]);for(let i=1;i<vals.length;i++)d+=' L'+sx(i)+','+sy(vals[i]);el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" height="230"><path d="${d} L${sx(vals.length-1)},${H-pad} L${pad},${H-pad} Z" fill="${run>=0?'rgba(22,101,52,.10)':'rgba(153,27,27,.10)'}"/><path d="${d}" fill="none" stroke="${run>=0?'#166534':'#991b1b'}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;document.getElementById('equity-meta').textContent=(run>=0?'+':'')+run.toFixed(2)+'R'}
-async function loadGamma(){document.getElementById('gamma-status').textContent='Loading...';try{let r=await fetch(`/api/freeflow?type=walls&symbol=QQQ&exp=${todayStr()}`);if(!r.ok)throw new Error('FreeFlow API returned HTTP '+r.status);let j=await r.json();if(j&&j.ok===false)throw new Error(j.message||'FreeFlow API returned an error');window.gammaData=j;document.getElementById('gamma-status').textContent='Live / API connected';const strip=document.getElementById('gamma-status-strip');if(strip)strip.textContent='Status: API connected · Chart: 2D GEX zones · Snapshot: live';updateGammaCards(j);renderGamma();let mini=document.getElementById('gamma-mini');if(mini)mini.textContent='Gamma loaded'}catch(e){document.getElementById('gamma-status').textContent='API error';const strip=document.getElementById('gamma-status-strip');if(strip)strip.textContent='Status: API error · Check FreeFlow key / endpoint';showError('Gamma API Error',e.message||'FreeFlow data could not load.');renderGamma()}}
-function fmtLevel(n){return n==null||n===''?'—':Math.round(Number(n)).toLocaleString()}
-function getTransferredLevels(j){
-  let g=j||{};
-  let call = g.call_wall?.strike ?? g.callWall ?? g.call_wall ?? null;
-  let put = g.put_wall?.strike ?? g.putWall ?? g.put_wall ?? null;
-  let flip = g.gamma_flip ?? g.gammaFlip ?? null;
-  let spot = g.spot ?? null;
-  // FreeFlow gives QQQ/SPY levels. Convert QQQ to NQ using current known ratio if levels are ETF-like.
-  // If the frontend/API already returns NQ-sized values, keep them.
-  const nqRef = Number(g.nq_ref || g.nqRef || 27906);
-  if(call && Number(call) < 1000){
-    const ratio = nqRef / Number(spot || 674.18);
-    call = Number(call) * ratio;
-    put = Number(put) * ratio;
-    flip = Number(flip) * ratio;
-    spot = nqRef;
+async async function loadGamma(){
+  const status=document.getElementById('gamma-status');
+  const strip=document.getElementById('gamma-status-strip');
+  if(status) status.textContent='Loading...';
+  if(strip) strip.textContent='Status: Loading FreeFlow API · Chart: 2D GEX zones';
+  try{
+    const expSel=document.getElementById('gamma-expiration');
+    const dte=expSel ? expSel.value : '0';
+    const r=await fetch(`/api/freeflow?type=walls&symbol=QQQ&dte=${encodeURIComponent(dte)}`);
+    if(!r.ok) throw new Error('FreeFlow API returned HTTP '+r.status);
+    const j=await r.json();
+    if(j && j.ok===false) throw new Error(j.message||'FreeFlow API returned an error');
+    window.gammaData=j;
+    if(status) status.textContent='Live / API connected';
+    if(strip) strip.textContent='Status: API connected · Chart: 2D GEX zones · Updated '+new Date().toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+    updateGammaCards(j);
+    renderGamma();
+    const mini=document.getElementById('gamma-mini');
+    if(mini) mini.textContent='Gamma loaded';
+  }catch(e){
+    console.error(e);
+    window.gammaData=window.gammaData||mockGammaData();
+    if(status) status.textContent='API error / fallback';
+    if(strip) strip.textContent='Status: API error · Showing local fallback zones until FreeFlow connects';
+    if(typeof showError==='function') showError('Gamma API Error',e.message||'FreeFlow data could not load.');
+    updateGammaCards(window.gammaData);
+    renderGamma();
   }
-  return {call:Number(call||27939), put:Number(put||26491), flip:Number(flip||27526), spot:Number(spot||27906)};
+}
+function fmtLevel(n){return n==null||n===''?'—':Math.round(Number(n)).toLocaleString()}
+function fmtLevel(n){return n==null||n===''||Number.isNaN(Number(n))?'—':Math.round(Number(n)).toLocaleString()}
+
+function asNum(v){
+  if(v==null || v==='') return null;
+  if(typeof v==='number') return Number.isFinite(v)?v:null;
+  if(typeof v==='object') return asNum(v.nqLevel ?? v.level ?? v.strike ?? v.price ?? v.value);
+  const x=Number(String(v).replace(/[$,+]/g,''));
+  return Number.isFinite(x)?x:null;
+}
+function wallLevel(v){return asNum(v?.nqLevel ?? v?.level ?? v?.strike ?? v)}
+function mockGammaData(){
+  return {
+    nqRef:27906, qqqSpot:674.18, net_gex:650000000, total_dex:5100000000,
+    call_wall:{strike:674.8, exposure:420000000},
+    put_wall:{strike:640.2, exposure:-310000000},
+    gamma_flip:665.2,
+    contracts:Array.from({length:28},(_,i)=>{
+      const strike=635+i*2;
+      const side = strike>=664 ? 1 : -1;
+      const amp = Math.exp(-Math.pow((strike-668)/18,2))*420000000;
+      return {strike,gex:side*amp*(.35+Math.random()*.65),gamma:0.001+i*.00002,oi:900+i*40,dex:side*amp*.55}
+    })
+  }
+}
+function getContracts(g){
+  return g?.contracts || g?.strikes || g?.snapshot?.contracts || g?.data?.contracts || g?.rows || [];
+}
+function getTransferredLevels(j){
+  const g=j||{};
+  const qqqSpot=asNum(g.qqqSpot ?? g.qqq_spot ?? g.spot ?? g.underlying_price) || 674.18;
+  const nqRef=asNum(g.nqSpot ?? g.nq_ref ?? g.nqRef ?? g.nq_reference ?? g.nqReference) || 27906;
+  const ratio = qqqSpot ? nqRef / qqqSpot : 41.39;
+  let call=wallLevel(g.callWall ?? g.call_wall ?? g.call_wall_price);
+  let put=wallLevel(g.putWall ?? g.put_wall ?? g.put_wall_price);
+  let flip=wallLevel(g.gammaFlip ?? g.gamma_flip ?? g.zero_gamma ?? g.flip);
+  if(call && call < 1000) call*=ratio;
+  if(put && put < 1000) put*=ratio;
+  if(flip && flip < 1000) flip*=ratio;
+  return {call:asNum(call)||27939, put:asNum(put)||26491, flip:asNum(flip)||27526, spot:nqRef, qqqSpot, ratio};
 }
 function updateGammaCards(j){
-  let lv=getTransferredLevels(j);
-  document.getElementById('g-call').textContent=fmtLevel(lv.call);
-  document.getElementById('g-put').textContent=fmtLevel(lv.put);
-  document.getElementById('g-flip').textContent=fmtLevel(lv.flip);
-  let range=document.getElementById('g-range');
+  const lv=getTransferredLevels(j);
+  const set=(id,v)=>{const el=document.getElementById(id); if(el) el.textContent=v};
+  set('g-call',fmtLevel(lv.call));
+  set('g-put',fmtLevel(lv.put));
+  set('g-flip',fmtLevel(lv.flip));
+  set('gamma-nq-ref',fmtLevel(lv.spot));
+  set('gamma-closest-level',closestGammaLabel(lv));
+  set('gamma-net-gex',compactNum(j?.net_gex ?? j?.netGex ?? j?.total_gex ?? j?.totalGex));
+  set('gamma-reaction-bias',(asNum(j?.net_gex ?? j?.total_gex)??1)>=0?'Positive Gamma':'Negative Gamma');
+  const range=document.getElementById('g-range');
   if(range) range.textContent=fmtLevel(lv.put)+'–'+fmtLevel(lv.call);
-  let strip=document.getElementById('gamma-status-strip');
-  if(strip) strip.textContent='Status: Live API · Updated '+new Date().toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})+' · Snapshot: loaded · NQ ref: '+fmtLevel(lv.spot)+' · Auto: off';
 }
-function makeGamma(){
-  let lv=getTransferredLevels(window.gammaData||{});
-  let mid=lv.spot || ((lv.call+lv.put)/2);
-  let minX=Math.min(lv.put, lv.flip, mid)*0.965;
-  let maxX=Math.max(lv.call, lv.flip, mid)*1.04;
-  let x=[],y=[],z=[];
-  for(let i=0;i<78;i++) x.push(minX + (maxX-minX)*i/77);
-  for(let j=0;j<42;j++) y.push(j*12/41);
-  for(let j=0;j<y.length;j++){
-    let row=[];
-    for(let i=0;i<x.length;i++){
-      const xi=x[i], yi=y[j];
-      let callPeak = 600*Math.exp(-Math.pow((xi-lv.call)/(maxX-minX)*7.0,2))*Math.exp(-yi/21);
-      let putValley = -500*Math.exp(-Math.pow((xi-lv.put)/(maxX-minX)*6.8,2))*Math.exp(-yi/18);
-      let flipDip = -150*Math.exp(-Math.pow((xi-lv.flip)/(maxX-minX)*12.0,2))*Math.exp(-Math.pow((yi-4.8)/5.5,2));
-      let wave = 34*Math.sin(i/9.5 + yi*.50) + 22*Math.cos(i/14 - yi*.42);
-      let slope = 100*((xi-mid)/(maxX-minX));
-      row.push(callPeak + putValley + flipDip + wave - slope);
-    }
-    z.push(row);
-  }
-  return {x,y,z,lv};
+function compactNum(v){
+  v=asNum(v); if(v==null)return'—';
+  const s=v>=0?'+':'-', a=Math.abs(v);
+  if(a>=1e9)return s+(a/1e9).toFixed(2)+'B';
+  if(a>=1e6)return s+(a/1e6).toFixed(2)+'M';
+  if(a>=1e3)return s+(a/1e3).toFixed(1)+'K';
+  return s+a.toFixed(0);
 }
-let gammaGridOn=true;
-let gammaViewMode='3d';
-function gammaColorscale(){
-  const mode=(document.getElementById('gamma-color-mode')?.value)||'classic';
-  if(mode==='heat') return [[0,'#be123c'],[.28,'#fb7185'],[.50,'#f8fafc'],[.72,'#2dd4bf'],[1,'#047857']];
-  if(mode==='contrast') return [[0,'#991b1b'],[.35,'#ef4444'],[.50,'#f4f4f5'],[.65,'#10b981'],[1,'#065f46']];
-  return [[0,'#e11d48'],[.34,'#fecdd3'],[.50,'#fafafa'],[.66,'#99f6e4'],[1,'#0f766e']];
+function closestGammaLabel(lv){
+  const arr=[['Call',lv.call],['Put',lv.put],['Flip',lv.flip]].filter(x=>Number.isFinite(x[1]));
+  if(!arr.length)return'—';
+  arr.sort((a,b)=>Math.abs(a[1]-lv.spot)-Math.abs(b[1]-lv.spot));
+  return arr[0][0]+' · '+fmtLevel(arr[0][1]);
 }
-function setGammaView(v){gammaViewMode=v;renderGamma()}
-function toggleGammaGrid(){gammaGridOn=!gammaGridOn;let b=document.getElementById('gamma-grid-toggle'); if(b)b.textContent=gammaGridOn?'Grid On':'Grid Off';renderGamma()}
 function updateGammaRead(){
-  let lv=getTransferredLevels(window.gammaData||{});
-  let spot=Number(lv.spot), call=Number(lv.call), put=Number(lv.put), flip=Number(lv.flip);
-  let between=spot<call && spot>put;
-  let aboveFlip=spot>flip;
-  let distFlip=Math.round(spot-flip);
-  let width=Math.round(call-put);
-  let regime=between?'Range / Pinning':'Expansion Risk';
-  let bias=aboveFlip?'Positive Gamma / Mean Reversion':'Negative Gamma / Volatile';
-  let title=between?`Pinned between ${fmtLevel(put)} and ${fmtLevel(call)}`:`Outside main walls — watch expansion`;
-  let text=between
-    ? `NQ is trading inside the expected gamma range. Treat ${fmtLevel(call)} as the upper reaction/resistance area, ${fmtLevel(put)} as support/risk, and ${fmtLevel(flip)} as the pivot zone. Best use: wait for order-flow confirmation at the level instead of chasing in the middle.`
-    : `NQ is trading outside or near the edge of the main gamma range. If price accepts outside the wall, moves can expand faster. Use the closest wall as the decision level and confirm with CVD, Bookmap, and absorption.`;
-  document.getElementById('gamma-read-title').textContent=title;
-  document.getElementById('gamma-read-text').textContent=text;
-  document.getElementById('gamma-regime').textContent=regime;
-  document.getElementById('gamma-bias').textContent=bias;
-  document.getElementById('gamma-dist-flip').textContent=(distFlip>=0?'+':'')+distFlip+' pts';
-  document.getElementById('gamma-range-width').textContent=width.toLocaleString()+' pts';
+  const g=window.gammaData||mockGammaData();
+  const lv=getTransferredLevels(g);
+  const spot=Number(lv.spot), call=Number(lv.call), put=Number(lv.put), flip=Number(lv.flip);
+  const between=spot<call && spot>put;
+  const aboveFlip=spot>flip;
+  const title=between?`NQ inside main gamma range`:`NQ near edge of gamma range`;
+  const text=between
+    ? `Watch ${fmtLevel(call)} as the upper reaction zone, ${fmtLevel(put)} as the lower risk zone, and ${fmtLevel(flip)} as the pivot. Wait for order-flow confirmation at the level.`
+    : `Price is near or outside the main wall range. Acceptance outside a wall can expand. Use CVD, Bookmap, and absorption before taking the trade.`;
+  const set=(id,v)=>{const el=document.getElementById(id); if(el) el.textContent=v};
+  set('gamma-read-title',title);
+  set('gamma-read-text',text);
+  set('gamma-regime',between?'Range / Pinning':'Expansion Risk');
+  set('gamma-bias',aboveFlip?'Positive Gamma / Mean Reversion':'Negative Gamma / Volatile');
+  set('gamma-dist-flip',(Math.round(spot-flip)>=0?'+':'')+Math.round(spot-flip)+' pts');
+  set('gamma-range-width',Math.round(call-put).toLocaleString()+' pts');
+}
+function gammaRows(g,lv){
+  const rows=[];
+  const contracts=getContracts(g);
+  contracts.forEach(c=>{
+    let q=asNum(c.strike ?? c.qqqStrike ?? c.rawStrike ?? c.qqqLevel);
+    let level=asNum(c.nqLevel ?? c.level ?? c.nq_price ?? c.nqPrice);
+    if(level==null && q!=null) level = q<1000 ? q*lv.ratio : q;
+    if(level==null) return;
+    let gex=asNum(c.gex ?? c.gamma_exposure ?? c.exposure);
+    if(gex==null || Math.abs(gex)<1) gex=(asNum(c.gamma)||0)*(asNum(c.oi)||0)*1000000;
+    rows.push({level,gex:gex||0,oi:asNum(c.oi)||0,dex:asNum(c.dex)||0});
+  });
+  if(!rows.some(r=>Math.abs(r.gex)>0)){
+    const net=asNum(g.net_gex ?? g.netGex ?? g.total_gex ?? g.totalGex)||500000000;
+    rows.push(
+      {level:lv.call,gex:Math.abs(net*.70),oi:0,dex:0},
+      {level:lv.flip,gex:(net>=0?1:-1)*Math.abs(net*.35),oi:0,dex:0},
+      {level:lv.put,gex:-Math.abs(net*.55),oi:0,dex:0}
+    );
+  }
+  const bucket=25, m=new Map();
+  rows.forEach(r=>{
+    const k=Math.round(r.level/bucket)*bucket;
+    const b=m.get(k)||{level:k,gex:0,oi:0,dex:0,count:0};
+    b.gex+=r.gex; b.oi+=r.oi; b.dex+=r.dex; b.count++;
+    m.set(k,b);
+  });
+  let out=[...m.values()].sort((a,b)=>a.level-b.level);
+  if(out.length>48) out=out.sort((a,b)=>Math.abs(b.gex)-Math.abs(a.gex)).slice(0,48).sort((a,b)=>a.level-b.level);
+  return out;
 }
 function renderGamma(){
-  if(!window.Plotly||!document.getElementById('gamma-chart'))return;
+  const el=document.getElementById('gamma-chart');
+  if(!el) return;
   updateGammaRead();
-  let d=makeGamma(), lv=d.lv;
-  let pathX=[], pathY=[], pathZ=[];
-  for(let i=0;i<9;i++){
-    const t=i/8;
-    pathX.push(lv.spot + Math.sin(t*Math.PI*1.2)*70 + (t-.5)*120);
-    pathY.push(.35 + t*1.8);
-    pathZ.push(300 + Math.sin(t*Math.PI)*25);
-  }
-  const gridColor=gammaGridOn?'rgba(24,22,17,.22)':'rgba(24,22,17,0)';
-  const cameraNext=gammaViewMode==='top'
-    ? {eye:{x:0.02,y:0.02,z:2.35},center:{x:0,y:0,z:0}}
-    : camera;
-  let traces=[
-    {type:'surface',x:d.x,y:d.y,z:d.z,colorscale:gammaColorscale(),showscale:true,opacity:.92,
-      lighting:{ambient:.72,diffuse:.78,specular:.18,roughness:.60,fresnel:.18},
-      contours:{x:{show:gammaGridOn,color:'rgba(24,22,17,.20)',width:1},y:{show:gammaGridOn,color:'rgba(24,22,17,.20)',width:1},z:{show:gammaGridOn,color:'rgba(24,22,17,.18)',width:1}},
-      colorbar:{title:'Reaction Bias',len:.66,thickness:14,x:1.02,titlefont:{size:14,color:'#171510'},tickfont:{size:12,color:'#6f6860'}}},
-    {type:'scatter3d',mode:'lines+markers',name:'Current price path',x:pathX,y:pathY,z:pathZ,line:{color:'#facc15',width:8},marker:{color:'#facc15',size:5,line:{color:'#171510',width:1}}},
-    {type:'scatter3d',mode:'markers+text',name:'Call Wall',x:[lv.call],y:[2.0],z:[260],marker:{color:'#087a50',size:6,symbol:'circle'},text:['Call Wall'],textposition:'top center',textfont:{color:'#087a50',size:14,family:'DM Sans'}},
-    {type:'scatter3d',mode:'markers+text',name:'Put Wall',x:[lv.put],y:[10.5],z:[-135],marker:{color:'#a11d1d',size:6,symbol:'circle'},text:['Put Wall'],textposition:'bottom center',textfont:{color:'#a11d1d',size:14,family:'DM Sans'}},
-    {type:'scatter3d',mode:'markers+text',name:'Gamma Flip',x:[lv.flip],y:[6.2],z:[-55],marker:{color:'#6d28d9',size:6,symbol:'circle'},text:['Gamma Flip'],textposition:'top center',textfont:{color:'#6d28d9',size:14,family:'DM Sans'}},
-    {type:'scatter3d',mode:'lines',x:[lv.spot,lv.call],y:[1.4,2.0],z:[300,260],line:{color:'#087a50',width:3,dash:'dot'},showlegend:false},
-    {type:'scatter3d',mode:'lines',x:[lv.flip,lv.put],y:[6.2,10.5],z:[-55,-135],line:{color:'#a11d1d',width:3,dash:'dot'},showlegend:false}
-  ];
-  Plotly.react('gamma-chart',traces,{
-    paper_bgcolor:'#fbfaf7',
-    plot_bgcolor:'#fbfaf7',
-    margin:{l:0,r:8,t:0,b:0},
-    showlegend:false,
-    scene:{
-      bgcolor:'#fbfaf7',
-      camera:cameraNext,
-      aspectratio:{x:1.72,y:.92,z:.70},
-      xaxis:{title:'X: Price Levels',color:'#171510',gridcolor:gridColor,zerolinecolor:'rgba(24,22,17,.32)',showgrid:gammaGridOn,gridwidth:1.4,showbackground:true,backgroundcolor:'rgba(255,255,255,.45)',tickfont:{size:12,color:'#6f6860'}},
-      yaxis:{title:'Y: 0DTE / DTE Path',color:'#171510',gridcolor:gridColor,zerolinecolor:'rgba(24,22,17,.32)',showgrid:gammaGridOn,gridwidth:1.4,showbackground:true,backgroundcolor:'rgba(255,255,255,.45)',tickfont:{size:12,color:'#6f6860'}},
-      zaxis:{title:'Z: Gamma Exposure Strength',color:'#171510',gridcolor:gridColor,zerolinecolor:'rgba(24,22,17,.32)',showgrid:gammaGridOn,gridwidth:1.4,showbackground:true,backgroundcolor:'rgba(255,255,255,.45)',tickfont:{size:12,color:'#6f6860'}}
-    }
-  },{responsive:true,scrollZoom:true,displaylogo:false});
+  const g=window.gammaData||mockGammaData();
+  const lv=getTransferredLevels(g);
+  updateGammaCards(g);
+  const rows=gammaRows(g,lv);
+  const levels=[lv.spot,lv.call,lv.put,lv.flip,...rows.map(r=>r.level)].filter(Number.isFinite);
+  const min=Math.min(...levels)-150, max=Math.max(...levels)+150;
+  let maxAbs=Math.max(...rows.map(r=>Math.abs(r.gex)),1);
+  if(maxAbs<100)maxAbs=100;
+  const W=980,H=610,ml=96,mr=168,mt=30,mb=62,plotW=W-ml-mr,plotH=H-mt-mb,x0=ml+plotW/2;
+  const xScale=v=>x0+(v/(maxAbs*1.25))*(plotW/2);
+  const yScale=v=>mt+(max-v)/(max-min)*plotH;
+  const barH=Math.max(8,Math.min(18,plotH/Math.max(rows.length,1)*.62));
+  const gridY=Array.from({length:7},(_,i)=>min+(max-min)*i/6);
+  const gridX=[-maxAbs,-maxAbs*.5,0,maxAbs*.5,maxAbs];
+  const zone=(v,label,color,solid=false)=>{
+    if(!Number.isFinite(v))return'';
+    const y=yScale(v), y1=yScale(v+15), y2=yScale(v-15);
+    return `<g>
+      <rect x="${ml}" y="${y1}" width="${plotW}" height="${Math.max(2,y2-y1)}" rx="8" fill="${color}" opacity=".07"/>
+      <line x1="${ml}" x2="${ml+plotW}" y1="${y}" y2="${y}" stroke="${color}" stroke-width="2.5" ${solid?'':'stroke-dasharray="8 7"'}/>
+      <rect x="${ml+plotW+8}" y="${y-16}" width="150" height="30" rx="10" fill="rgba(255,255,255,.94)" stroke="${color}"/>
+      <text x="${ml+plotW+18}" y="${y+4}" font-size="12" font-weight="900" fill="${color}">${label} ${fmtLevel(v)}</text>
+    </g>`;
+  };
+  const bars=rows.map(r=>{
+    let v=r.gex||0;
+    if(v===0)v=maxAbs*.05;
+    if(Math.abs(v)<maxAbs*.075)v=Math.sign(v||1)*maxAbs*.075;
+    const y=yScale(r.level)-barH/2, x=v>=0?x0:xScale(v), w=Math.max(Math.abs(xScale(v)-x0),5);
+    const color=r.gex>=0?'rgba(20,184,166,.88)':'rgba(239,105,80,.88)';
+    return `<g><title>NQ Zone: ${fmtLevel(r.level)}\nGEX: ${compactNum(r.gex)}\nDEX: ${compactNum(r.dex)}\nOI: ${fmtLevel(r.oi)}\nRows: ${r.count}</title><rect x="${x}" y="${y}" width="${w}" height="${barH}" rx="5" fill="${color}" stroke="rgba(17,24,39,.14)"/></g>`;
+  }).join('');
+  el.innerHTML=`<svg class="svg-gex-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="2D NQ gamma map">
+    <rect x="${ml}" y="${mt}" width="${plotW}" height="${plotH}" rx="18" fill="rgba(255,255,255,.72)" stroke="rgba(17,24,39,.08)"/>
+    ${gridY.map(v=>`<g><line x1="${ml}" x2="${ml+plotW}" y1="${yScale(v)}" y2="${yScale(v)}" stroke="rgba(148,163,184,.28)"/><text x="${ml-12}" y="${yScale(v)+4}" text-anchor="end" font-size="12" font-weight="800" fill="#475569">${fmtLevel(v)}</text></g>`).join('')}
+    ${gridX.map(v=>`<g><line x1="${xScale(v)}" x2="${xScale(v)}" y1="${mt}" y2="${mt+plotH}" stroke="${v===0?'rgba(17,24,39,.45)':'rgba(148,163,184,.22)'}" stroke-width="${v===0?2:1}"/><text x="${xScale(v)}" y="${mt+plotH+26}" text-anchor="middle" font-size="12" font-weight="800" fill="#475569">${compactNum(v)}</text></g>`).join('')}
+    ${zone(lv.spot,'NQ Spot','#facc15',true)}
+    ${zone(lv.call,'Call Wall','#087a50')}
+    ${zone(lv.flip,'Gamma Flip','#6d28d9')}
+    ${zone(lv.put,'Put Wall','#a11d1d')}
+    ${bars}
+    <text x="${ml+plotW/2}" y="${H-14}" text-anchor="middle" font-size="13" font-weight="950" fill="#334155">GEX / Pressure</text>
+    <text x="24" y="${mt+plotH/2}" text-anchor="middle" transform="rotate(-90 24 ${mt+plotH/2})" font-size="13" font-weight="950" fill="#334155">NQ Zones</text>
+  </svg>`;
 }
 function resetCamera(){camera={eye:{x:1.52,y:1.18,z:.82},center:{x:0,y:0,z:0}};renderGamma()} function gammaZoom(f){camera.eye.x*=f;camera.eye.y*=f;camera.eye.z*=f;renderGamma()}
 function loadSettings(){try{settings=JSON.parse(localStorage.getItem('nq_settings')||'{}')}catch{settings={}};applySettings()}
