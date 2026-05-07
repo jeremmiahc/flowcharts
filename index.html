@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EdgeFlow Command Center</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&family=DM+Serif+Display&display=swap" rel="stylesheet">
-<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js">
+init();
+</script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -1069,8 +1071,30 @@ async function sbInsert(table,row){let r=await fetch(SUPA_URL+'/rest/v1/'+table,
 async function sbUpdate(table,id,row){let r=await fetch(SUPA_URL+'/rest/v1/'+table+'?id=eq.'+id,{method:'PATCH',headers:{apikey:SUPA_KEY,Authorization:'Bearer '+SUPA_KEY,'Content-Type':'application/json',Prefer:'return=representation'},body:JSON.stringify(row)});if(!r.ok)throw new Error(await r.text());return r.json()}
 async function sbDelete(table,id){let r=await fetch(SUPA_URL+'/rest/v1/'+table+'?id=eq.'+id,{method:'DELETE',headers:{apikey:SUPA_KEY,Authorization:'Bearer '+SUPA_KEY}});if(!r.ok)throw new Error('HTTP '+r.status)}
 function normalizeScreenshots(t){let s=t.screenshot_urls||[];if(typeof s==='string'&&s[0]==='{')s=s.slice(1,-1).split(',').map(u=>u.replace(/^"|"$/g,''));else if(typeof s==='string'){try{s=JSON.parse(s)}catch{s=[]}}t.screenshot_urls=(Array.isArray(s)?s:[]).filter(Boolean).map(u=>String(u).startsWith('http')?String(u).replace('/storage/v1/object/screenshots/','/storage/v1/object/public/screenshots/'):SUPA_URL+'/storage/v1/object/public/screenshots/'+String(u).replace(/^\\/,'')).filter(Boolean);return t}
-async function loadTrades(){setConn('loading','Fetching trades...');try{trades=(await sbSelect('trades')).map(normalizeScreenshots);setConn('ok','Connected · '+trades.length+' trades');try{renderAll()}catch(renderErr){console.error(renderErr);showError('Render Error',renderErr.message);toast('Render error: '+renderErr.message,'red')}}catch(e){setConn('err',e.message);showError('Supabase Connection Error',e.message);try{trades=JSON.parse(localStorage.getItem('nq_local_trades')||'[]')}catch{trades=[]}try{renderAll()}catch(renderErr){console.error(renderErr);showError('Render Error',renderErr.message);toast('Render error: '+renderErr.message,'red')}}}
-function setConn(state,msg){let b=document.getElementById('db-badge');b.className='status-badge '+(state==='ok'?'ok':state==='err'?'err':'warn');b.textContent=(state==='err'?'Supabase error':msg);let d=document.getElementById('conn-detail');if(d)d.textContent=msg}
+async function loadTrades(){
+  setConn('loading','Fetching trades...');
+  try{
+    trades=(await sbSelect('trades')).map(normalizeScreenshots);
+    setConn('ok','Connected · '+trades.length+' trades');
+    try{renderAll()}catch(renderErr){console.error(renderErr);showError('Render Error',renderErr.message);toast('Render error: '+renderErr.message,'red')}
+    return trades;
+  }catch(e){
+    setConn('err',e.message||'Supabase unavailable');
+    showError('Supabase Connection Error',e.message||'Supabase unavailable');
+    try{trades=JSON.parse(localStorage.getItem('nq_local_trades')||'[]')}catch{trades=[]}
+    try{renderAll()}catch(renderErr){console.error(renderErr);showError('Render Error',renderErr.message);toast('Render error: '+renderErr.message,'red')}
+    return trades;
+  }
+}
+function setConn(state,msg){
+  let b=document.getElementById('db-badge');
+  if(b){
+    b.className='status-badge '+(state==='ok'?'ok':state==='err'?'err':'warn');
+    b.textContent=state==='ok'?(msg||'Supabase connected'):state==='err'?'Supabase error':(msg||'Checking Supabase...');
+  }
+  let d=document.getElementById('conn-detail');
+  if(d)d.textContent=msg||'';
+}
 function navTo(p){document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.getElementById('page-'+p).classList.add('active');document.querySelectorAll('.tab-item').forEach(x=>x.classList.remove('active'));document.getElementById('tab-'+p).classList.add('active');currentPage=p;document.getElementById('page-title').textContent={today:"Today's Session",history:"Trade History",log:"Log a Trade",gamma:"Gamma Lens",stats:"Statistics",more:"Settings"}[p];if(p==='stats')renderStats();if(p==='today')renderToday();if(p==='history')renderHistory();if(p==='gamma')setTimeout(renderGamma,80);if(p==='more'){applySettings();loadAudioSettings()}}
 function sessTimes(){let toMin=t=>{let p=(t||'00:00').split(':');return +p[0]*60+(+p[1]||0)};return{prime:toMin(settings.primeSt||'06:45'),good:toMin(settings.goodSt||'07:45'),end:toMin(settings.endSt||'10:30')}}
 function getSessionLabel(time){if(!time)return'';let [h,m]=time.split(':').map(Number),mins=h*60+(m||0),s=sessTimes();if(mins>=s.prime&&mins<s.good)return'Prime';if(mins>=s.good&&mins<s.end)return'Good';if(mins>=s.end)return'Slow';return''}
@@ -1268,7 +1292,7 @@ function setupScreenshotDropzones(){
 }
 
 async function uploadScreenshots(){let groups=[{files:ssFilesOf,tag:'of'},{files:ssFilesBm,tag:'bm'},{files:ssFiles,tag:'other'}],urls=[];for(let g of groups){for(let file of g.files.filter(Boolean)){let ext=file.name.split('.').pop()||'jpg',path='trade-'+g.tag+'-'+Date.now()+'-'+Math.random().toString(36).slice(2,7)+'.'+ext;try{let r=await fetch(SUPA_URL+'/storage/v1/object/screenshots/'+path,{method:'POST',headers:{apikey:SUPA_KEY,Authorization:'Bearer '+SUPA_KEY,'Content-Type':file.type||'image/jpeg','x-upsert':'true'},body:file});if(r.ok)urls.push(SUPA_URL+'/storage/v1/object/public/screenshots/'+path)}catch(e){}}}return urls}
-async function saveTrade(){let btn=document.getElementById('save-btn'),editId=btn.dataset.editId||'',date=document.getElementById('f-date').value,direction=getToggle('direction'),outcome=getToggle('outcome'),why=document.getElementById('f-why').value.trim();if(!date||!direction||!outcome){toast('Date, direction, and outcome required','red');return}if(!why){toast('Please explain why you took this trade','red');return}btn.disabled=true;btn.textContent='Saving...';try{let time=document.getElementById('f-time').value,shots=await uploadScreenshots(),trade={date,direction,outcome,notes:(document.getElementById('f-notes').value||'')+(time?'\nTime: '+time:''),session:getSessionLabel(time),confluences:getSelectedConfs(),instrument:'NQ',r_result:parseFloat(document.getElementById('f-r').value)||null,pnl_usd:parseFloat(document.getElementById('f-pnl').value)||null,emotion:getToggle('emotion'),why_taken:why,setup_num:getToggle('setup'),played_out:getToggle('played_out'),poi_type:getToggle('poi_type'),screenshot_urls:shots};let saved=editId?await sbUpdate('trades',editId,trade):await sbInsert('trades',trade);if(outcome==='Win')playWinSound();clearForm();await loadTrades().catch(e=>showError('Startup Error',e.message));refreshCalendarNow();navTo(editId?'history':'today');toast('Trade saved · calendar updated','green')}catch(e){showError('Save Failed',e.message);toast('Save failed: '+e.message,'red')}btn.disabled=false;btn.textContent='Save Trade'}
+async function saveTrade(){let btn=document.getElementById('save-btn'),editId=btn.dataset.editId||'',date=document.getElementById('f-date').value,direction=getToggle('direction'),outcome=getToggle('outcome'),why=document.getElementById('f-why').value.trim();if(!date||!direction||!outcome){toast('Date, direction, and outcome required','red');return}if(!why){toast('Please explain why you took this trade','red');return}btn.disabled=true;btn.textContent='Saving...';try{let time=document.getElementById('f-time').value,shots=await uploadScreenshots(),trade={date,direction,outcome,notes:(document.getElementById('f-notes').value||'')+(time?'\nTime: '+time:''),session:getSessionLabel(time),confluences:getSelectedConfs(),instrument:'NQ',r_result:parseFloat(document.getElementById('f-r').value)||null,pnl_usd:parseFloat(document.getElementById('f-pnl').value)||null,emotion:getToggle('emotion'),why_taken:why,setup_num:getToggle('setup'),played_out:getToggle('played_out'),poi_type:getToggle('poi_type'),screenshot_urls:shots};let saved=editId?await sbUpdate('trades',editId,trade):await sbInsert('trades',trade);if(outcome==='Win')playWinSound();clearForm();await loadTrades();refreshCalendarNow();navTo(editId?'history':'today');toast('Trade saved · calendar updated','green')}catch(e){showError('Save Failed',e.message);toast('Save failed: '+e.message,'red')}btn.disabled=false;btn.textContent='Save Trade'}
 function clearForm(){['f-date','f-time','f-r','f-pnl','f-why','f-notes'].forEach(id=>{let e=document.getElementById(id);if(e)e.value=id==='f-date'?todayStr():id==='f-time'?new Date().toTimeString().slice(0,5):''});document.querySelectorAll('.btt').forEach(b=>b.className='btt');document.querySelectorAll('[data-core="1"]').forEach(b=>b.className='btt sel-core');['ss-previews','ss-previews-of','ss-previews-bm'].forEach(id=>document.getElementById(id).innerHTML='');ssFiles=[];ssFilesOf=[];ssFilesBm=[];document.getElementById('cancel-edit-btn').style.display='none';document.getElementById('save-btn').dataset.editId='';updateFormSession()}
 function cancelEdit(){clearForm();navTo('history')} function updateFormSession(){let e=document.getElementById('form-session');if(e)e.textContent=getSessionLabel(document.getElementById('f-time').value)||'—'} document.addEventListener('input',e=>{if(e.target.id==='f-time')updateFormSession()})
 function openModal(id){let t=trades.find(x=>x.id==id);if(!t)return;document.getElementById('modal-title').textContent=(t.direction||'Trade')+' · '+(t.outcome||'');let shots=t.screenshot_urls||[];document.getElementById('modal-body').innerHTML=`<div class="grid grid-3"><div class="card"><div class="card-label">P&L</div><div class="level-val ${Number(t.pnl_usd)>=0?'pos':'neg'}">${t.pnl_usd!=null?money(t.pnl_usd):'—'}</div></div><div class="card"><div class="card-label">R</div><div class="level-val">${t.r_result??'—'}</div></div><div class="card"><div class="card-label">Session</div><div class="level-val">${t.session||'—'}</div></div></div><div class="modal-section"><div class="card-label">Why</div><p style="line-height:1.7">${t.why_taken||'—'}</p></div><div class="modal-section"><div class="card-label">Notes</div><p style="white-space:pre-wrap;line-height:1.7">${t.notes||'—'}</p></div><div class="modal-section"><div class="card-label">Screenshots</div><div class="grid grid-2">${shots.length?shots.map(u=>`<img src="${u}" style="width:100%;border-radius:14px;cursor:zoom-in" onclick="openLightbox('${u}')">`).join(''):'<span class="muted">No screenshots</span>'}</div></div>`;document.getElementById('modal-del').onclick=()=>deleteTrade(id);document.getElementById('modal-edit').onclick=()=>editTrade(id);document.getElementById('modal').classList.add('open')}
@@ -1328,10 +1352,22 @@ async async function loadGamma(){
   try{
     const expSel=document.getElementById('gamma-expiration');
     const dte=expSel ? expSel.value : '0';
-    const r=await fetch(`/api/freeflow?type=walls&symbol=QQQ&dte=${encodeURIComponent(dte)}`);
-    if(!r.ok) throw new Error('FreeFlow API returned HTTP '+r.status);
-    const j=await r.json();
-    if(j && j.ok===false) throw new Error(j.message||'FreeFlow API returned an error');
+    const urls=[
+      `/api/freeflow?type=walls&symbol=QQQ&dte=${encodeURIComponent(dte)}`,
+      `/api/freeflow?endpoint=walls&symbol=QQQ&dte=${encodeURIComponent(dte)}`,
+      `/api/freeflow`
+    ];
+    let j=null,lastErr=null;
+    for(const url of urls){
+      try{
+        const r=await fetch(url);
+        if(!r.ok) throw new Error(url+' returned HTTP '+r.status);
+        j=await r.json();
+        if(j&&j.ok===false) throw new Error(j.message||'FreeFlow API returned an error');
+        break;
+      }catch(e){lastErr=e}
+    }
+    if(!j) throw lastErr||new Error('FreeFlow API unavailable');
     window.gammaData=j;
     if(status) status.textContent='Live / API connected';
     if(strip) strip.textContent='Status: API connected · Chart: 2D GEX zones · Updated '+new Date().toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
@@ -1678,7 +1714,43 @@ function playWinSound(){
   const track=audioTracks[Math.floor(Math.random()*audioTracks.length)];
   playAudioWithFade(track.dataUrl);
 }
-async function init(){document.getElementById('f-date').value=todayStr();document.getElementById('f-time').value=new Date().toTimeString().slice(0,5);loadSettings();loadAudioSettings();setupScreenshotDropzones();setupAudioDropzone();updateFormSession();await loadTrades();loadGamma();setInterval(updateStatusBar,60000)} init();
+async function init(){
+  try{
+    loadSettings();
+    applySettings();
+    clearForm();
+    updateStatusBar();
+    setInterval(updateStatusBar,30000);
+
+    // Render shell immediately so the app never looks frozen while APIs load.
+    try{renderAll()}catch(e){console.error(e);showError('Render Error',e.message)}
+
+    // Load Supabase trades. If Supabase fails, render local/fallback state and show error.
+    try{
+      await loadTrades();
+    }catch(e){
+      console.error(e);
+      showError('Supabase Load Error',e.message||'Trades could not load.');
+      try{trades=JSON.parse(localStorage.getItem('nq_local_trades')||'[]')}catch{trades=[]}
+      try{renderAll()}catch(renderErr){console.error(renderErr);showError('Render Error',renderErr.message)}
+    }
+
+    // Load gamma separately so one broken API cannot freeze the whole dashboard.
+    try{
+      await loadGamma();
+    }catch(e){
+      console.error(e);
+      showError('Gamma Load Error',e.message||'Gamma could not load.');
+      window.gammaData=window.gammaData||mockGammaData();
+      try{updateGammaCards(window.gammaData);renderGamma()}catch(renderErr){console.error(renderErr);showError('Gamma Render Error',renderErr.message)}
+    }
+
+    setupAudioDropzone?.();
+  }catch(e){
+    console.error(e);
+    showError('Startup Error',e.message||'App failed to start.');
+  }
+} init();
 </script>
 
 
